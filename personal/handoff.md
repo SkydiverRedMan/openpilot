@@ -125,6 +125,16 @@ Recommended approach:
 - Avoid using a face/photo for safety-critical onroad icons if it makes state recognition slower or less clear.
 - Make this a separate pass after verifying the BSM fix, settings defaults, startup sound, and install behavior.
 
+## Custom Paramotor Boot Graphic
+
+On 2026-05-26, the FrogPilot boot graphic was replaced with an original paramotor-themed emblem inspired by, but not copied from, Keith's `Paramotor Flight Tracker` app icon.
+
+- Install branch asset: `frogpilot/assets/other_images/frogpilot_boot_logo.png`
+- Source branch asset: `frogpilot/assets/other_images/frogpilot_boot_logo.jpg`
+- The artwork is intentionally rotated inside the portrait-sized file to match the original comma/FrogPilot boot-logo display orientation.
+- The stock restore image `frogpilot/assets/other_images/stock_bg.jpg` was not changed.
+- If the comma is already installing while this commit is pushed, it may not pick up this image until the next reinstall/update depending on when the installer fetched the branch.
+
 ## Lane Change / BSM Issue
 
 Observed behavior: FrogPilot starts a nudgeless lane change after the signal delay even when the vehicle mirror blind spot indicator is lit.
