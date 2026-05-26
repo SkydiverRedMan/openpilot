@@ -38,6 +38,24 @@ For a full backup, enable SSH on the comma, set the GitHub username in device se
 - `/data/toggle_backups`
 - `/data/backups`
 
+## Defaults From Backup
+
+On 2026-05-26, the Pond toggle backup was decoded locally and used to update code defaults for the user's preferred FrogPilot driving/UI behavior.
+
+Updated files:
+
+- Install branch: `frogpilot/common/frogpilot_variables.py`
+- Source branch: `common/params_keys.h`
+
+Only the active/default value was changed for each setting. Stock defaults were left unchanged.
+
+Intentionally not committed as defaults:
+
+- account, token, key, username, dongle, and network fields
+- vehicle identity/runtime params such as `CarMake`, `CarModel`, and car params blobs
+- location/search/map selections such as favorites, last search, and selected map regions
+- cache/update/runtime state such as downloaded theme/model metadata
+
 ## Lane Change / BSM Issue
 
 Observed behavior: FrogPilot starts a nudgeless lane change after the signal delay even when the vehicle mirror blind spot indicator is lit.
