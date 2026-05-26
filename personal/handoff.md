@@ -23,7 +23,7 @@ Use this full installer URL on the comma:
 
 `https://installer.comma.ai/SkydiverRedMan/bsm-highlander-install`
 
-The short installer entry should also work:
+The short installer entry worked on the comma and is easier to type:
 
 `SkydiverRedMan/bsm-highlander-install`
 
