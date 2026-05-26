@@ -77,6 +77,9 @@ build/
 poetry.toml
 Pipfile
 
+# Local device backups may contain params, tokens, keys, or vehicle-specific settings.
+device_backups/
+
 ### VisualStudioCode ###
 .vscode/*
 !.vscode/settings.json
