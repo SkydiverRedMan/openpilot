@@ -64,6 +64,13 @@ On 2026-05-26, a `NavigationAssistedDecisions` feature flag was added as a futur
 - Source branch: the same scaffold exists; the toggle now also plays the prompt sound when flipped.
 - Current behavior is intentionally safe: flipping the toggle refreshes FrogPilot settings and plays a sound, but it does not change steering, braking, acceleration, or lane changes.
 
+## Custom Startup Sound
+
+On 2026-05-26, `Keith-WooHoo.m4a` was converted to `frogpilot/assets/random_events/sounds/startup.wav`.
+
+- Format: mono, 16-bit PCM WAV, 48 kHz.
+- This path is loaded by `selfdrive/ui/soundd.py` before active theme sounds, so it overrides the default FrogPilot startup sound.
+
 ## Lane Change / BSM Issue
 
 Observed behavior: FrogPilot starts a nudgeless lane change after the signal delay even when the vehicle mirror blind spot indicator is lit.
