@@ -56,6 +56,14 @@ Intentionally not committed as defaults:
 - location/search/map selections such as favorites, last search, and selected map regions
 - cache/update/runtime state such as downloaded theme/model metadata
 
+## Navigation Assist Placeholder
+
+On 2026-05-26, a `NavigationAssistedDecisions` feature flag was added as a future expansion point.
+
+- Install branch: the Navigation panel has a `Navigation Assist Mode` toggle, the param exists in defaults/params, and the planner has a no-op route-context scaffold.
+- Source branch: the same scaffold exists; the toggle now also plays the prompt sound when flipped.
+- Current behavior is intentionally safe: flipping the toggle refreshes FrogPilot settings and plays a sound, but it does not change steering, braking, acceleration, or lane changes.
+
 ## Lane Change / BSM Issue
 
 Observed behavior: FrogPilot starts a nudgeless lane change after the signal delay even when the vehicle mirror blind spot indicator is lit.
