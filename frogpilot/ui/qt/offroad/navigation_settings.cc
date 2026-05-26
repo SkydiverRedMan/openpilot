@@ -1,5 +1,26 @@
 #include "frogpilot/ui/qt/offroad/navigation_settings.h"
 
+#include <algorithm>
+
+#include <QFile>
+#include <QProcess>
+
+namespace {
+void playNavigationAssistSound(int volume) {
+  const QString alert = "prompt";
+  const QString stockPath = "../../selfdrive/assets/sounds/" + alert + ".wav";
+  const QString themePath = "../../frogpilot/assets/active_theme/sounds/" + alert + ".wav";
+  const QString filePath = QFile::exists(themePath) ? themePath : stockPath;
+
+  const int clampedVolume = std::clamp(volume, 0, 100);
+  if (clampedVolume == 0) {
+    return;
+  }
+
+  QProcess::startDetached("ffplay", {"-nodisp", "-autoexit", "-volume", QString::number(clampedVolume), filePath});
+}
+}
+
 FrogPilotNavigationPanel::FrogPilotNavigationPanel(FrogPilotSettingsWindow *parent, bool forceOpen) : FrogPilotListWidget(parent), parent(parent) {
   forceOpenDescriptions = forceOpen;
 
@@ -120,6 +141,8 @@ FrogPilotNavigationPanel::FrogPilotNavigationPanel(FrogPilotSettingsWindow *pare
                                             "../../frogpilot/assets/toggle_icons/icon_navigate.png");
   QObject::connect(navigationAssistToggle, &ToggleControl::toggleFlipped, [this]() {
     updateFrogPilotToggles();
+    params_memory.put("TestAlert", "prompt");
+    playNavigationAssistSound(params.getInt("PromptVolume"));
   });
   settingsList->addItem(navigationAssistToggle);
 
