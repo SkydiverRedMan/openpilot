@@ -35,6 +35,14 @@ Install note from 2026-05-26:
 - This can be slower than the prior FrogPilot install because the setup installer clones the custom branch from GitHub with submodules unless it can use a local cache.
 - Keep the device powered and on reliable Wi-Fi. Do not interrupt unless it errors or sits with no progress for a long time.
 
+Install error note from 2026-05-26:
+
+- The first custom install reached "finalizing install" and then failed at startup with a manager traceback.
+- Screenshot was moved locally to `C:\Users\keith\My Drive\Projects\FrogPilot\device_backups\install_errors\2026-05-26-manager-param-error.jpg`. It was not committed because it is a phone/device photo.
+- Traceback pointed at `system/manager/manager.py` while initializing FrogPilot default params, through `common.params_pyx.Params.check_key`.
+- Root cause: the install/prebuilt branch has a committed compiled `common/params_pyx.so` from `63b1beb Compile FrogPilot`. The new `NavigationAssistedDecisions` param was added after that compile, so the source had the key but the compiled params extension on-device did not.
+- Fix: remove the new persistent param from the install branch and make the Navigation Assist placeholder a non-persistent test button that only refreshes FrogPilot toggles and plays a prompt sound.
+
 ## Backups
 
 A The Pond toggle backup was saved locally at:
@@ -112,6 +120,7 @@ Recommended approach:
 
 - Do a cosmetic/user-facing rebrand only: labels, splash/boot graphics, offroad UI graphics, theme name, sounds, steering wheel assets, and other visible theme assets.
 - Keep internal `frogpilot` folders, modules, params, and scripts named as-is to reduce merge conflicts and avoid breaking update/install assumptions.
+- Do not add new persistent params to the install/prebuilt branch unless `common/params_pyx.so` is rebuilt for the device. Adding a new key only to `common/params.cc` can crash manager startup.
 - Treat personal photos carefully because committed assets may be public on GitHub. If using a photo of Keith's wife, get clear permission first or keep those assets private/local.
 - Avoid using a face/photo for safety-critical onroad icons if it makes state recognition slower or less clear.
 - Make this a separate pass after verifying the BSM fix, settings defaults, startup sound, and install behavior.
