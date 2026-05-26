@@ -18,6 +18,7 @@ from openpilot.frogpilot.controls.lib.frogpilot_acceleration import FrogPilotAcc
 from openpilot.frogpilot.controls.lib.frogpilot_events import FrogPilotEvents
 from openpilot.frogpilot.controls.lib.frogpilot_following import FrogPilotFollowing
 from openpilot.frogpilot.controls.lib.frogpilot_vcruise import FrogPilotVCruise
+from openpilot.frogpilot.controls.lib.navigation_assisted_decisions import NavigationAssistedDecisions
 from openpilot.frogpilot.controls.lib.weather_checker import WeatherChecker
 
 class FrogPilotPlanner:
@@ -28,6 +29,7 @@ class FrogPilotPlanner:
     self.frogpilot_following = FrogPilotFollowing(self)
     self.frogpilot_vcruise = FrogPilotVCruise(self)
     self.frogpilot_weather = WeatherChecker()
+    self.navigation_assist = NavigationAssistedDecisions()
 
     self.tracking_lead_filter = FirstOrderFilter(0, 0.5, DT_MDL)
 
@@ -63,6 +65,11 @@ class FrogPilotPlanner:
     else:
       self.cem.curve_detected = False
       self.cem.stop_sign_and_light(v_ego, sm, PLANNER_TIME - 2)
+
+    if getattr(frogpilot_toggles, "navigation_assisted_decisions", False):
+      self.navigation_assist.update(sm)
+    else:
+      self.navigation_assist.reset()
 
     self.driving_in_curve = abs(self.lateral_acceleration) >= MINIMUM_LATERAL_ACCELERATION
 

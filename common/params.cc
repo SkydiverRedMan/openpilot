@@ -418,6 +418,7 @@ std::unordered_map<std::string, uint32_t> keys = {
     {"ModelToDownload", CLEAR_ON_MANAGER_START},
     {"ModelUI", PERSISTENT},
     {"ModelVersions", PERSISTENT},
+    {"NavigationAssistedDecisions", PERSISTENT},
     {"NavigationUI", PERSISTENT},
     {"NextMapSpeedLimit", CLEAR_ON_MANAGER_START},
     {"NewLongAPI", PERSISTENT},
