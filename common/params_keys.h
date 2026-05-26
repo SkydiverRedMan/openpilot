@@ -309,6 +309,7 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"ModelRandomizer", {PERSISTENT, BOOL, "0", "0", 2}},
     {"ModelToDownload", {CLEAR_ON_MANAGER_START, STRING, "", ""}},
     {"ModelUI", {PERSISTENT, BOOL, "1", "0", 2}},
+    {"NavigationAssistedDecisions", {PERSISTENT, BOOL, "0", "0", 2}},
     {"NavigationUI", {PERSISTENT, BOOL, "1", "0", 1}},
     {"NNFF", {PERSISTENT, BOOL, "1", "0", 2}},
     {"NNFFLite", {PERSISTENT, BOOL, "1", "0", 2}},

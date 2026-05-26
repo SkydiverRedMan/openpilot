@@ -114,6 +114,15 @@ FrogPilotNavigationPanel::FrogPilotNavigationPanel(FrogPilotSettingsWindow *pare
   });
   settingsList->addItem(setupButton);
 
+  navigationAssistToggle = new ParamControl("NavigationAssistedDecisions", tr("Navigation Assist Mode"),
+                                            tr("<b>Enable the experimental navigation-assisted decision mode.</b><br><br>"
+                                               "When this is off, FrogPilot keeps your current behavior. This initial setup only tracks route context and does not change steering, braking, or lane changes."),
+                                            "../../frogpilot/assets/toggle_icons/icon_navigate.png");
+  QObject::connect(navigationAssistToggle, &ToggleControl::toggleFlipped, [this]() {
+    updateFrogPilotToggles();
+  });
+  settingsList->addItem(navigationAssistToggle);
+
   std::vector<QString> filterButtonNames{tr("CANCEL"), tr("Manually Update Speed Limits")};
   updateSpeedLimitsToggle = new FrogPilotButtonControl("SpeedLimitFiller", tr("Speed Limit Filler"),
                                                     tr("<b>Automatically collect missing or incorrect speed limits while you drive</b> using speeds limits sourced from your dashboard (if supported), "
@@ -205,6 +214,7 @@ FrogPilotNavigationPanel::FrogPilotNavigationPanel(FrogPilotSettingsWindow *pare
       publicMapboxKeyControl->showDescription();
       secretMapboxKeyControl->showDescription();
       setupButton->showDescription();
+      navigationAssistToggle->showDescription();
       updateSpeedLimitsToggle->showDescription();
     }
   });
@@ -216,6 +226,7 @@ void FrogPilotNavigationPanel::showEvent(QShowEvent *event) {
     publicMapboxKeyControl->showDescription();
     secretMapboxKeyControl->showDescription();
     setupButton->showDescription();
+    navigationAssistToggle->showDescription();
     updateSpeedLimitsToggle->showDescription();
   }
 
@@ -235,6 +246,7 @@ void FrogPilotNavigationPanel::showEvent(QShowEvent *event) {
 
   updateSpeedLimitsToggle->setVisibleButton(0, updatingLimits);
   updateSpeedLimitsToggle->setVisibleButton(1, !updatingLimits);
+  navigationAssistToggle->setVisible(parent->tuningLevel >= parent->frogpilotToggleLevels["NavigationAssistedDecisions"].toDouble());
 
   if (updatingLimits) {
     updateSpeedLimitsToggle->setValue(QString::fromStdString(params_memory.get("UpdateSpeedLimitsStatus")));
@@ -259,6 +271,7 @@ void FrogPilotNavigationPanel::mousePressEvent(QMouseEvent *event) {
       publicMapboxKeyControl->showDescription();
       secretMapboxKeyControl->showDescription();
       setupButton->showDescription();
+      navigationAssistToggle->showDescription();
       updateSpeedLimitsToggle->showDescription();
     }
   }
