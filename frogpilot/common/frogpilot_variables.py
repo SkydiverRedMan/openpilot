@@ -630,7 +630,6 @@ class FrogPilotVariables:
     toggle.road_edge_width = self.get_value("RoadEdgesWidth", cast=float, condition=toggle.model_ui and not toggle.debug_mode, conversion=small_distance_conversion / 200)
 
     navigation_ui = self.get_value("NavigationUI")
-    toggle.navigation_assisted_decisions = self.get_value("NavigationAssistedDecisions")
     toggle.road_name_ui = self.get_value("RoadNameUI", condition=navigation_ui) or toggle.debug_mode
     toggle.show_speed_limits = self.get_value("ShowSpeedLimits", condition=navigation_ui) or toggle.debug_mode
     toggle.speed_limit_vienna = self.get_value("UseVienna", condition=navigation_ui)
