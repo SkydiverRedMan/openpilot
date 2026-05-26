@@ -29,6 +29,12 @@ The short installer entry should also work:
 
 This installs the compiled/install branch with the backed-up defaults, Toyota Highlander BSM enablement, the Navigation Assist placeholder toggle, and Keith's custom startup sound.
 
+Install note from 2026-05-26:
+
+- Keith started installing this branch on the comma and saw the installer at about 26%.
+- This can be slower than the prior FrogPilot install because the setup installer clones the custom branch from GitHub with submodules unless it can use a local cache.
+- Keep the device powered and on reliable Wi-Fi. Do not interrupt unless it errors or sits with no progress for a long time.
+
 ## Backups
 
 A The Pond toggle backup was saved locally at:
@@ -97,6 +103,18 @@ On 2026-05-26, `Keith-WooHoo.m4a` was converted to `frogpilot/assets/random_even
 
 - Format: mono, 16-bit PCM WAV, 48 kHz.
 - This path is loaded by `selfdrive/ui/soundd.py` before active theme sounds, so it overrides the default FrogPilot startup sound.
+
+## Future RedManPilot Branding
+
+Keith wants to consider changing user-facing FrogPilot branding to `RedManPilot` and customizing graphics after the current install is verified.
+
+Recommended approach:
+
+- Do a cosmetic/user-facing rebrand only: labels, splash/boot graphics, offroad UI graphics, theme name, sounds, steering wheel assets, and other visible theme assets.
+- Keep internal `frogpilot` folders, modules, params, and scripts named as-is to reduce merge conflicts and avoid breaking update/install assumptions.
+- Treat personal photos carefully because committed assets may be public on GitHub. If using a photo of Keith's wife, get clear permission first or keep those assets private/local.
+- Avoid using a face/photo for safety-critical onroad icons if it makes state recognition slower or less clear.
+- Make this a separate pass after verifying the BSM fix, settings defaults, startup sound, and install behavior.
 
 ## Lane Change / BSM Issue
 
