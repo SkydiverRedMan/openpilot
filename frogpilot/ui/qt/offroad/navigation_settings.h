@@ -36,7 +36,7 @@ private:
   ButtonControl *setupButton;
 
   FrogPilotButtonControl *updateSpeedLimitsToggle;
-  ParamControl *navigationAssistToggle;
+  ButtonControl *navigationAssistButton;
 
   FrogPilotButtonsControl *searchInput;
 

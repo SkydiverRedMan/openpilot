@@ -331,7 +331,6 @@ frogpilot_default_params: list[tuple[str, str | bytes, int, str]] = [
   ("ModelRandomizer", "0", 2, "0"),
   ("ModelUI", "1", 2, "0"),
   ("ModelVersions", "", 2, ""),
-  ("NavigationAssistedDecisions", "0", 2, "0"),
   ("NavigationUI", "1", 1, "0"),
   ("NavSettingLeftSide", "0", 0, "0"),
   ("NavSettingTime24h", "0", 0, "0"),
@@ -926,7 +925,6 @@ class FrogPilotVariables:
     toggle.unlimited_road_ui_length = toggle.model_ui and (params.get_bool("UnlimitedLength") if toggle.tuning_level >= level["UnlimitedLength"] else default.get_bool("UnlimitedLength"))
 
     toggle.navigation_ui = params.get_bool("NavigationUI") if toggle.tuning_level >= level["NavigationUI"] else default.get_bool("NavigationUI")
-    toggle.navigation_assisted_decisions = params.get_bool("NavigationAssistedDecisions") if toggle.tuning_level >= level["NavigationAssistedDecisions"] else default.get_bool("NavigationAssistedDecisions")
     toggle.big_map = toggle.navigation_ui and (params.get_bool("BigMap") if toggle.tuning_level >= level["BigMap"] else default.get_bool("BigMap"))
     toggle.full_map = toggle.big_map and (params.get_bool("FullMap") if toggle.tuning_level >= level["FullMap"] else default.get_bool("FullMap"))
     toggle.map_style = params.get_int("MapStyle") if toggle.navigation_ui and toggle.tuning_level >= level["MapStyle"] else default.get_int("MapStyle")
