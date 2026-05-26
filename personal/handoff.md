@@ -17,6 +17,18 @@ Last updated: 2026-05-26
 - `ssh comma@192.168.68.134` works from Keith's laptop after removing a stale `known_hosts` entry for that IP.
 - The Pond web UI served a blank dark page in Chrome, but the backend API still worked. A direct `POST /api/toggles/backup` succeeded.
 
+## Install Address
+
+Use this full installer URL on the comma:
+
+`https://installer.comma.ai/SkydiverRedMan/bsm-highlander-install`
+
+The short installer entry should also work:
+
+`SkydiverRedMan/bsm-highlander-install`
+
+This installs the compiled/install branch with the backed-up defaults, Toyota Highlander BSM enablement, the Navigation Assist placeholder toggle, and Keith's custom startup sound.
+
 ## Backups
 
 A The Pond toggle backup was saved locally at:
@@ -127,7 +139,7 @@ The core logic now enables BSM for `TOYOTA_HIGHLANDER` when CAN message `0x3F6` 
 
 ## Next Steps
 
-1. Install or test `SkydiverRedMan/openpilot` branch `bsm-highlander-install`.
+1. Install or test `https://installer.comma.ai/SkydiverRedMan/bsm-highlander-install`.
 2. After install, verify BSM behavior on-road or from logs:
    - `carState.leftBlindspot` should go true when the left mirror BSM light is active.
    - `carState.rightBlindspot` should go true when the right mirror BSM light is active.
