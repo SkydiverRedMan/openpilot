@@ -13,7 +13,9 @@ Last updated: 2026-05-26
 
 - Device IP found on Wi-Fi: `192.168.68.134`.
 - The Pond web UI is reachable at `http://192.168.68.134:8082`.
-- SSH on port `22` was closed when checked, so a full `/data/params/d` backup could not be pulled yet.
+- On 2026-05-26, SSH was enabled on the comma and the GitHub username `SkydiverRedMan` was added for SSH keys.
+- `ssh comma@192.168.68.134` works from Keith's laptop after removing a stale `known_hosts` entry for that IP.
+- The Pond web UI served a blank dark page in Chrome, but the backend API still worked. A direct `POST /api/toggles/backup` succeeded.
 
 ## Backups
 
@@ -21,9 +23,13 @@ A The Pond toggle backup was saved locally at:
 
 `C:\Users\keith\My Drive\Projects\FrogPilot\device_backups\comma_192.168.68.134_20260526_171855`
 
+A fresh SSH/settings backup was saved locally at:
+
+`C:\Users\keith\My Drive\Projects\FrogPilot\device_backups\comma_192.168.68.134_ssh_20260526_181543`
+
 That folder is intentionally ignored by git because it may contain settings, tokens, keys, or vehicle-specific params. Do not commit `device_backups/`.
 
-The backup folder contains:
+The first backup folder contains:
 
 - `toggle-backup.json` from `POST /api/toggles/backup`
 - `pond-stats.json`
@@ -32,11 +38,20 @@ The backup folder contains:
 - `FrogPilotCarParamsPersistent.param`
 - small text snapshots like `CarModel.param`, `GitBranch.param`, and `IsMetric.txt`
 
-For a full backup, enable SSH on the comma, set the GitHub username in device settings, then copy at least:
+The SSH backup folder contains:
 
-- `/data/params/d`
-- `/data/toggle_backups`
-- `/data/backups`
+- `params/` copied from `/data/params`
+- `toggle_backups/` copied from `/data/toggle_backups`
+- `themes/` copied from `/data/themes`
+- `openpilot_frogpilot_assets/active_theme/` copied from `/data/openpilot/frogpilot/assets/active_theme`
+- `toggle-backup-from-pond.json` from direct The Pond backup API
+- `device_snapshot.txt` with hostname, branch, commit, git status, and selected `/data` folder sizes
+
+Large folders intentionally not copied unless needed:
+
+- `/data/backups` was about 5.1 GB
+- `/data/models` was about 2.1 GB
+- `/data/openpilot` was about 1.3 GB
 
 ## Defaults From Backup
 
@@ -112,10 +127,8 @@ The core logic now enables BSM for `TOYOTA_HIGHLANDER` when CAN message `0x3F6` 
 
 ## Next Steps
 
-1. Enable SSH on the comma and confirm `ssh comma@192.168.68.134` works.
-2. Pull a full `/data/params/d` backup before installing anything.
-3. Install or test `SkydiverRedMan/openpilot` branch `bsm-highlander-install`.
-4. After install, verify BSM behavior on-road or from logs:
+1. Install or test `SkydiverRedMan/openpilot` branch `bsm-highlander-install`.
+2. After install, verify BSM behavior on-road or from logs:
    - `carState.leftBlindspot` should go true when the left mirror BSM light is active.
    - `carState.rightBlindspot` should go true when the right mirror BSM light is active.
-5. If left/right are flipped on this Highlander, adjust Toyota BSM parsing for this platform before using the feature.
+3. If left/right are flipped on this Highlander, adjust Toyota BSM parsing for this platform before using the feature.
