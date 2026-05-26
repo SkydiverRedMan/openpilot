@@ -1,5 +1,26 @@
 #include "frogpilot/ui/qt/offroad/navigation_settings.h"
 
+#include <algorithm>
+
+#include <QFile>
+#include <QProcess>
+
+namespace {
+void playNavigationAssistSound(int volume) {
+  const QString alert = "prompt";
+  const QString stockPath = "../../selfdrive/assets/sounds/" + alert + ".wav";
+  const QString themePath = "../../frogpilot/assets/active_theme/sounds/" + alert + ".wav";
+  const QString filePath = QFile::exists(themePath) ? themePath : stockPath;
+
+  const int clampedVolume = std::clamp(volume, 0, 100);
+  if (clampedVolume == 0) {
+    return;
+  }
+
+  QProcess::startDetached("ffplay", {"-nodisp", "-autoexit", "-volume", QString::number(clampedVolume), filePath});
+}
+}
+
 FrogPilotNavigationPanel::FrogPilotNavigationPanel(FrogPilotSettingsWindow *parent) : FrogPilotListWidget(parent), parent(parent) {
   networkManager = new QNetworkAccessManager(this);
 
@@ -145,6 +166,17 @@ FrogPilotNavigationPanel::FrogPilotNavigationPanel(FrogPilotSettingsWindow *pare
   });
   settingsList->addItem(setupButton);
 
+  navigationAssistToggle = new ParamControl("NavigationAssistedDecisions", tr("Navigation Assist Mode"),
+                                            tr("<b>Enable the experimental navigation-assisted decision mode.</b><br><br>"
+                                               "For now this is a placeholder for future work. Flipping it only refreshes FrogPilot settings and plays a prompt sound."),
+                                            "../../frogpilot/assets/toggle_icons/icon_navigate.png");
+  QObject::connect(navigationAssistToggle, &ToggleControl::toggleFlipped, [this]() {
+    updateFrogPilotToggles();
+    params_memory.put("TestAlert", "prompt");
+    playNavigationAssistSound(params.getInt("PromptVolume"));
+  });
+  settingsList->addItem(navigationAssistToggle);
+
   std::vector<QString> filterButtonNames{tr("CANCEL"), tr("Manually Update Speed Limits")};
   updateSpeedLimitsToggle = new FrogPilotButtonControl("SpeedLimitFiller", tr("Speed Limit Filler"),
                                                     tr("<b>Automatically collect missing or incorrect speed limits while you drive</b> using speeds limits sourced from your dashboard (if supported), "
@@ -239,6 +271,7 @@ FrogPilotNavigationPanel::FrogPilotNavigationPanel(FrogPilotSettingsWindow *pare
       searchInput->showDescription();
       secretMapboxKeyControl->showDescription();
       setupButton->showDescription();
+      navigationAssistToggle->showDescription();
       updateSpeedLimitsToggle->showDescription();
     }
   });
@@ -253,6 +286,7 @@ void FrogPilotNavigationPanel::showEvent(QShowEvent *event) {
     searchInput->showDescription();
     secretMapboxKeyControl->showDescription();
     setupButton->showDescription();
+    navigationAssistToggle->showDescription();
     updateSpeedLimitsToggle->showDescription();
   }
 
@@ -281,6 +315,7 @@ void FrogPilotNavigationPanel::showEvent(QShowEvent *event) {
 
   updateSpeedLimitsToggle->setVisibleButton(0, updatingLimits);
   updateSpeedLimitsToggle->setVisibleButton(1, !updatingLimits);
+  navigationAssistToggle->setVisible(parent->tuningLevel >= parent->frogpilotToggleLevels["NavigationAssistedDecisions"].toDouble());
 
   if (updatingLimits) {
     updateSpeedLimitsToggle->setValue(QString::fromStdString(params_memory.get("UpdateSpeedLimitsStatus")));
@@ -308,6 +343,7 @@ void FrogPilotNavigationPanel::mousePressEvent(QMouseEvent *event) {
       searchInput->showDescription();
       secretMapboxKeyControl->showDescription();
       setupButton->showDescription();
+      navigationAssistToggle->showDescription();
       updateSpeedLimitsToggle->showDescription();
     }
   }
