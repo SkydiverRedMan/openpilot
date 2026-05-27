@@ -21,6 +21,28 @@ WATCHDOG_FN = "/dev/shm/wd_"
 ENABLE_WATCHDOG = os.getenv("NO_WATCHDOG") is None
 
 
+class NativeSubprocess:
+  def __init__(self, args: list[str], cwd: str, env: dict[str, str]) -> None:
+    self.popen = subprocess.Popen(args, cwd=cwd, env=env)
+
+  @property
+  def pid(self) -> int:
+    return self.popen.pid
+
+  @property
+  def exitcode(self) -> int | None:
+    return self.popen.poll()
+
+  def is_alive(self) -> bool:
+    return self.popen.poll() is None
+
+  def join(self, timeout: float | None = None) -> None:
+    try:
+      self.popen.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+      pass
+
+
 def launcher(proc: str, name: str) -> None:
   try:
     # import the process
@@ -75,6 +97,11 @@ class ManagerProcess(ABC):
   watchdog_max_dt: int | None = None
   watchdog_seen = False
   shutting_down = False
+
+  def clear_dead(self) -> None:
+    if self.proc is not None and self.proc.exitcode is not None:
+      cloudlog.warning(f"{self.name} exited with {self.proc.exitcode}, restarting")
+      self.proc = None
 
   @abstractmethod
   def prepare(self) -> None:
@@ -186,13 +213,16 @@ class NativeProcess(ManagerProcess):
     if self.shutting_down:
       self.stop()
 
+    self.clear_dead()
+
     if self.proc is not None:
       return
 
     cwd = os.path.join(BASEDIR, self.cwd)
     cloudlog.info(f"starting process {self.name}")
-    self.proc = Process(name=self.name, target=self.launcher, args=(self.cmdline, cwd, self.name))
-    self.proc.start()
+    env = os.environ.copy()
+    env['MANAGER_DAEMON'] = self.name
+    self.proc = NativeSubprocess(self.cmdline, cwd, env)
     self.watchdog_seen = False
     self.shutting_down = False
 
@@ -216,6 +246,8 @@ class PythonProcess(ManagerProcess):
     # In case we only tried a non blocking stop we need to stop it before restarting
     if self.shutting_down:
       self.stop()
+
+    self.clear_dead()
 
     if self.proc is not None:
       return

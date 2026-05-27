@@ -342,3 +342,24 @@ Continuation note:
 - First thing after resume: ask Keith what the comma did after download/finalizing.
 - Then research online whether openpilot/FrogPilot UI rebuilds are better done directly on comma hardware or by cross-compiling from Ubuntu/WSL.
 - Include in that research whether committing a rebuilt/stripped `selfdrive/ui/ui` binary to an installer branch is a reliable practice.
+
+## UI Segfault Under Manager After Install - 2026-05-27
+
+User reported:
+> the comma started booting and showed the new logo at 11:41
+
+Findings:
+
+- The comma installed `bsm-highlander-install` and reached the custom boot logo.
+- SSH worked, `manager.py` and Weston were running, and `launch_env.sh` had the Wayland variables.
+- `managerState` showed `ui running=False should=True exit=-11`.
+- Manual UI launches from a shell survived until explicitly killed.
+- A Python `multiprocessing.Process` launch reproduced the `exit=-11` failure, matching manager's native process launcher.
+- A `subprocess.Popen` launch survived.
+
+Fix:
+
+- Patched `system/manager/process.py` to launch native processes with a small `NativeSubprocess` wrapper around `subprocess.Popen`.
+- Added dead-process clearing before process start so manager can retry a crashed process instead of latching the dead handle.
+- Hotpatched the file on the comma, verified `py_compile`, rebooted, and confirmed manager restarted `ui` after the first `-11`.
+- After the patch, `managerState` showed `ui running=True should=True`.
