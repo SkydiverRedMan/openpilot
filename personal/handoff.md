@@ -135,6 +135,24 @@ On 2026-05-26, the FrogPilot boot graphic was replaced with an original paramoto
 - The stock restore image `frogpilot/assets/other_images/stock_bg.jpg` was not changed.
 - If the comma is already installing while this commit is pushed, it may not pick up this image until the next reinstall/update depending on when the installer fetched the branch.
 
+## Random Events Showcase
+
+On 2026-05-26, a local showcase folder was added for Keith to browse the funny FrogPilot random-event sounds, popup/banner text, icons, and steering wheel animations on the laptop:
+
+`personal/random_events_showcase/`
+
+Contents:
+
+- `README.md` catalogs the random-event popup text, sounds, visual assets, and trigger conditions.
+- `play_random_event_sounds.ps1` plays every random-event WAV in order from PowerShell.
+- `random_events_assets/` is copied from `frogpilot/assets/random_events/`.
+- `stock_openpilot_sounds/` contains the normal openpilot alert sounds used by some FrogPilot banners.
+- `holiday_theme_sounds/` contains the holiday theme sound packs.
+
+The running assistant message transcript is being tracked in:
+
+`personal/assistant_message_log.md`
+
 ## Lane Change / BSM Issue
 
 Observed behavior: FrogPilot starts a nudgeless lane change after the signal delay even when the vehicle mirror blind spot indicator is lit.
