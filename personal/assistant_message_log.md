@@ -372,3 +372,33 @@ Follow-up:
 - Restored `selfdrive/ui/ui`, `launch_env.sh`, `system/manager/process.py`, and `frogpilot/assets/random_events/sounds/startup.wav` from commit `28cc023`.
 - Result: install branch intentionally keeps the Navigation Assist source button, but uses the older prebuilt UI binary that does not show it.
 - User confirmed the comma UI is working after rollback and asked to note that the next UI rebuild attempt should use WSL/Ubuntu first.
+
+## Clean BSM Installer Success - 2026-05-27
+
+User wanted the Highlander BSM fix, paramotor boot logo, and corrected custom startup sound without the heavier personal/random files.
+
+Actions completed:
+
+- Created a lean installer branch from the last stable prebuilt point before the random showcase and failed UI rebuild work.
+- Replaced the startup sound in the guaranteed override path: `frogpilot/assets/random_events/sounds/startup.wav`.
+- Deleted the temporary long branch name `bsm-highlander-clean-install` from GitHub.
+- Pushed the short installer branch:
+
+  `SkydiverRedMan/bsm`
+
+- Verified GitHub and installer URLs responded.
+- User confirmed the comma installed and booted successfully from `SkydiverRedMan/bsm`.
+
+Current active install target:
+
+`SkydiverRedMan/bsm`
+
+Expected commit:
+
+`3d2ec297`
+
+Expired active guidance:
+
+- Do not use `SkydiverRedMan/bsm-highlander-install` as the normal install target anymore.
+- Do not retry the previous one-file rebuilt native UI binary transplant.
+- Keep notes and random showcase assets off comma install branches.
