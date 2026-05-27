@@ -153,6 +153,35 @@ The running assistant message transcript is being tracked in:
 
 `personal/assistant_message_log.md`
 
+## Navigation Assist Button UI Rebuild
+
+On 2026-05-26, the missing `Navigation Assist Mode` button was traced to a stale prebuilt UI executable:
+
+- Source already contained the button in `frogpilot/ui/qt/offroad/navigation_settings.cc`.
+- The device's installed source file also contained the button text.
+- The running executable `/data/openpilot/selfdrive/ui/ui` did not contain `Navigation Assist Mode`, so the C++ UI binary had not been rebuilt.
+
+Fix path used:
+
+- Copied the full source tree from the laptop to the comma in verified chunks.
+- Reassembled `/data/frogpilot-source.tar` on the comma and verified its SHA-256 hash against the laptop archive.
+- Extracted to `/data/build_openpilot_ui`, added temporary local Git metadata, installed `uv`, ran `uv sync --frozen`, then built `selfdrive/ui/ui` on the comma with `scons -j2 --minimal selfdrive/ui/ui`.
+- Verified the rebuilt executable is ARM64/aarch64 and contains `Navigation Assist Mode`.
+- Stripped debug symbols before copying back: the rebuilt binary went from about 74 MB to about 3.5 MB.
+
+The install branch now has the rebuilt `selfdrive/ui/ui` binary. After the comma installs this update, the Navigation page should show `Navigation Assist Mode` with a `TEST` button.
+
+## Louder WooHoo Startup Sound
+
+On 2026-05-26, Keith noticed the custom WooHoo startup sound was quieter than the other FrogPilot sounds.
+
+Change made:
+
+- `frogpilot/assets/random_events/sounds/startup.wav` was amplified by `+4 dB`.
+- Audio format stayed the same: 48 kHz, mono, 16-bit PCM WAV, about 3.01 seconds.
+- Volume changed from roughly `mean=-20.8 dB, max=-4.7 dB` to `mean=-16.8 dB, max=-0.7 dB`.
+- The same audio change was applied in both the install worktree and the source worktree.
+
 ## Lane Change / BSM Issue
 
 Observed behavior: FrogPilot starts a nudgeless lane change after the signal delay even when the vehicle mirror blind spot indicator is lit.
