@@ -363,3 +363,11 @@ Fix:
 - Added dead-process clearing before process start so manager can retry a crashed process instead of latching the dead handle.
 - Hotpatched the file on the comma, verified `py_compile`, rebooted, and confirmed manager restarted `ui` after the first `-11`.
 - After the patch, `managerState` showed `ui running=True should=True`.
+
+Follow-up:
+
+- The UI continued to hit repeated `exit=-11` crashes, so the manager retry was not enough.
+- Static active icon/distance-icon symlinks did not stabilize it.
+- User asked to roll back to the working GitHub install from before the UI binary was rebuilt.
+- Restored `selfdrive/ui/ui`, `launch_env.sh`, `system/manager/process.py`, and `frogpilot/assets/random_events/sounds/startup.wav` from commit `28cc023`.
+- Result: install branch intentionally keeps the Navigation Assist source button, but uses the older prebuilt UI binary that does not show it.
