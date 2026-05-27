@@ -1,0 +1,196 @@
+FrogPilot next steps: branches, Ubuntu, UI rebuilds
+Date: 2026-05-27
+
+Purpose
+-------
+This note records the recommended plan after the 2026-05-26/2026-05-27
+FrogPilot sessions, especially the native UI rebuild problem, the Toyota
+Highlander BSM work, and the need to consolidate changes before installing
+again.
+
+Where the play-by-play lives
+----------------------------
+The detailed prompt/assistant play-by-play from last night was recovered from
+the remote branch:
+
+  origin/bsm-highlander-install
+
+It is now copied locally into:
+
+  personal/assistant_message_log.md
+
+The shorter technical handoff summary is now copied locally into:
+
+  personal/handoff.md
+
+Those files are not on the current stable `my-frogpilot` branch history yet;
+they were restored locally from the `bsm-highlander-install` branch so they can
+be read from this checkout.
+
+Current branch situation
+------------------------
+There are several separate branches with different purposes:
+
+1. Stable install branch:
+   - Branch: my-frogpilot
+   - Install path: SkydiverRedMan/my-frogpilot
+   - Purpose: known-good prebuilt runtime.
+   - Current useful change: custom FrogPilot startup sound.
+   - This branch still has the `prebuilt` marker and the old working
+     precompiled `selfdrive/ui/ui`.
+
+2. Source development branch:
+   - Branch: my-frogpilot-source
+   - Purpose: source/build work.
+   - Current useful change: Navigation Assist scaffold.
+   - Not the safe normal install target.
+
+3. BSM source branch:
+   - Branch: bsm-highlander-source
+   - Purpose: Toyota Highlander BSM source work.
+   - Contains the source-side BSM fix and Navigation Assist scaffold.
+
+4. BSM install/test branch:
+   - Branch: bsm-highlander-install
+   - Install path: SkydiverRedMan/bsm-highlander-install
+   - Purpose: comma-installable test branch for Toyota Highlander BSM.
+   - Contains BSM fix, rollback from failed UI rebuild, and the detailed
+     personal handoff/play-by-play notes.
+
+Main recommendation: consolidate before the next install
+-------------------------------------------------------
+Before installing anything else on the comma, make one deliberate install
+branch that contains exactly the changes we want to test.
+
+Recommended target:
+
+  bsm-highlander-install
+
+Why:
+
+- It already contains the Toyota Highlander BSM fix.
+- It already rolled back the unstable rebuilt UI binary.
+- It is already shaped as a prebuilt install branch.
+- It has the notes that explain what happened.
+
+Before using it again, compare it against `my-frogpilot` and copy/cherry-pick
+any safe personal changes that are missing, especially the latest startup sound
+placement if needed.
+
+Do not keep switching between `my-frogpilot` and `bsm-highlander-install`
+without first checking what each branch contains. That is how we can easily
+lose track of which device behavior is being tested.
+
+Native UI recommendation
+------------------------
+Do not try to make the native Navigation Assist button show up again yet.
+
+What happened:
+
+- The C++ source file on the comma did contain the new button.
+- The running binary `selfdrive/ui/ui` did not contain the button.
+- We rebuilt `selfdrive/ui/ui` directly on the comma from the source tree.
+- The rebuilt binary was ARM64 and did contain the new button text.
+- After installing that binary into the prebuilt branch, the comma reached the
+  boot logo but the UI did not stay up.
+- We tried Wayland/Qt environment fixes and a manager native-process launch
+  workaround.
+- The UI still crash-looped.
+- We rolled back to the old working prebuilt UI binary.
+
+Conclusion:
+
+Do not copy a single rebuilt native UI binary into the prebuilt branch unless
+we know it was built from the exact matching release tree and all matching
+generated files, libraries, resources, and runtime assumptions are present.
+
+Better choices:
+
+1. Avoid native UI changes for now.
+2. Put personal buttons/actions in The Pond web UI instead.
+3. Use an existing param or existing settings surface when possible.
+4. If native UI is truly required, build a complete matching prebuilt release
+   from one source commit, not a one-file UI binary transplant.
+
+Ubuntu / WSL recommendation
+---------------------------
+Ubuntu will help, but it is not a magic fix for comma-ready binaries.
+
+What Ubuntu/WSL is good for:
+
+- Searching and reading code in a Linux-like environment.
+- Running source-tree setup scripts such as `tools/ubuntu_setup.sh`.
+- Running `uv sync`, Python checks, tests, and linters.
+- Building local developer targets to catch compile errors earlier.
+- Understanding the full build process before touching the comma.
+
+What normal Ubuntu/WSL on an Intel/AMD PC does not automatically do:
+
+- It does not automatically produce a comma-ready ARM64/TICI `selfdrive/ui/ui`
+  binary.
+- Cross-compiling or emulating ARM64 is a separate project.
+- A binary built for the laptop cannot simply be copied to the comma.
+
+Practical use of Ubuntu next time:
+
+1. Use Ubuntu/WSL to set up the full source checkout cleanly.
+2. Run source checks and targeted builds to confirm the code is internally
+   consistent.
+3. Use it to understand which artifacts a proper prebuilt release needs.
+4. Only after that decide whether the final ARM64 build should happen on the
+   comma, through a proper release workflow, or not at all.
+
+Recommended next session plan
+-----------------------------
+When back on the main laptop:
+
+1. Pull/fetch all branches.
+2. Inspect differences between:
+   - my-frogpilot
+   - bsm-highlander-install
+   - bsm-highlander-source
+   - my-frogpilot-source
+3. Decide the next install target.
+4. Most likely target: `bsm-highlander-install`, after ensuring it contains
+   the latest custom startup sound in the correct FrogPilot sound path.
+5. Leave the old working prebuilt `selfdrive/ui/ui` in place.
+6. Do not reintroduce the rebuilt UI binary.
+7. Install/update the comma from:
+
+     SkydiverRedMan/bsm-highlander-install
+
+8. Verify the comma boots normally and the UI is stable.
+9. Verify branch and commit over SSH.
+10. Test BSM behavior carefully:
+    - left mirror BSM light should produce `carState.leftBlindspot = true`
+    - right mirror BSM light should produce `carState.rightBlindspot = true`
+    - if left/right are flipped, fix parsing before trusting lane-change logic
+11. Only after BSM is verified should we consider any new UI work.
+
+Safer place for the Navigation Assist test action
+-------------------------------------------------
+If the goal is just to have a personal button that triggers a test action, put
+it in The Pond web UI instead of the native settings screen.
+
+Reason:
+
+- The Pond is Python/static web code.
+- It does not require rebuilding `selfdrive/ui/ui`.
+- It can call backend endpoints, set params, trigger diagnostics, or run safe
+  personal actions.
+- It is much less likely to create a boot-logo hang.
+
+Rules for future changes
+------------------------
+1. One purpose per branch.
+2. One behavior change per commit when possible.
+3. Keep a known-good install branch untouched.
+4. Do not add new persistent params to a prebuilt branch unless the matching
+   compiled params extension is rebuilt.
+5. Do not copy one native executable across branch families as a shortcut.
+6. For assets and sounds, direct prebuilt-branch changes are usually fine.
+7. For C++ UI, schemas, DBC generator changes, and compiled extensions, start
+   in the source branch and plan the full build/release path.
+8. Before driving, verify the comma boots cleanly, manager processes are
+   healthy, and the branch/commit are the expected ones.
+
