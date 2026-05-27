@@ -112,6 +112,12 @@ On 2026-05-26, `Keith-WooHoo.m4a` was converted to `frogpilot/assets/random_even
 - Format: mono, 16-bit PCM WAV, 48 kHz.
 - This path is loaded by `selfdrive/ui/soundd.py` before active theme sounds, so it overrides the default FrogPilot startup sound.
 
+Update from 2026-05-27:
+
+- The latest custom startup sound from `my-frogpilot` was copied into the guaranteed override path on `bsm-highlander-install`:
+  `frogpilot/assets/random_events/sounds/startup.wav`
+- This keeps the Toyota Highlander BSM fix and paramotor boot logo on the install branch while avoiding the previous problem where the new sound lived only under the frog theme/holiday asset path.
+
 ## Future RedManPilot Branding
 
 Keith wants to consider changing user-facing FrogPilot branding to `RedManPilot` and customizing graphics after the current install is verified.
