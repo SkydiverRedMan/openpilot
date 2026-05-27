@@ -215,6 +215,27 @@ When continuing:
 3. Compare that research against what happened here: on-device compile worked, but the rebuilt UI needed explicit Weston display environment variables in `launch_env.sh`.
 4. Before rebuilding UI again, decide whether to use WSL/Ubuntu locally, build on the comma, or avoid binary rebuilds unless absolutely needed.
 
+## UI Segfault Under Manager After Install
+
+After the install finished, the comma showed the custom boot logo but did not advance to the normal UI. SSH still worked.
+
+Findings:
+
+- Installed branch was `bsm-highlander-install`.
+- The device eventually updated to commit `066d5cf`.
+- `launch_env.sh` had the Weston variables and manager inherited them.
+- `managerState` showed `ui running=False should=True exit=-11`, meaning the manager-launched UI segfaulted.
+- Running the same UI from a shell survived until manually killed by `timeout`.
+- Reproduced the crash by launching UI through Python `multiprocessing.Process`, matching manager's native launcher path.
+- Launching UI with `subprocess.Popen` survived.
+
+Fix:
+
+- Patched `system/manager/process.py` so native processes launch through a small `NativeSubprocess` wrapper using `subprocess.Popen`.
+- Added dead-process clearing before process start so a one-time native crash does not leave manager latched to a dead process object.
+- Hotpatched `/data/openpilot/system/manager/process.py` on the comma, syntax-checked it, converted LF line endings, and rebooted.
+- On the next boot, the first UI attempt still exited `-11`, manager logged `ui exited with -11, restarting`, and the restarted `./ui` stayed running.
+
 ## Lane Change / BSM Issue
 
 Observed behavior: FrogPilot starts a nudgeless lane change after the signal delay even when the vehicle mirror blind spot indicator is lit.
