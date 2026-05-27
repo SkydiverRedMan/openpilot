@@ -261,3 +261,47 @@ Created:
 
 Assistant completion note:
 > The random events showcase was created under `personal/random_events_showcase/`, the running assistant message log was saved at `personal/assistant_message_log.md`, and both were committed/pushed to GitHub. The old comma build transfer was stopped; the missing Navigation Assist UI button is still not fixed yet because the prebuilt UI executable has not been rebuilt.
+
+## Navigation Assist UI Rebuild - 2026-05-26
+
+User asked:
+> how do we fix the missing navigation assist button?
+
+Assistant:
+> We fix it by rebuilding the comma's `ui` app with the already-added source code, then putting that rebuilt file into the GitHub install branch.
+
+Assistant:
+> The device is reachable, and it only has the first two archive chunks. I’m resuming from chunk 3 now; this is just copying source to `/data`, not changing the running install yet.
+
+User asked for more frequent status checks:
+> its been 14 minutes, please check the status way more often than that
+
+Assistant:
+> You’re right. I let that batch run too long without a status message. I’m changing the process now: one chunk at a time, then a status update after each chunk, so you see progress every few minutes.
+
+Key status messages:
+
+- The comma already had chunks `000` through `008`; chunks `009` through `015` were copied and verified.
+- All 16 chunks matched exactly.
+- `/data/frogpilot-source.tar` was reassembled on the comma and its SHA-256 matched the laptop archive: `55b0338f746c9d4dcf352674cfcf259909e2def410e849841a088d6ae8180bd9`.
+- The extracted source contained `Navigation Assist Mode` in `frogpilot/ui/qt/offroad/navigation_settings.cc`.
+- `uv` was installed on the comma at `/data/uv`.
+- `uv sync --frozen` initially timed out downloading `requests`, then succeeded after retrying with a longer timeout.
+- `scons -j2 --minimal selfdrive/ui/ui` completed successfully on the comma.
+- The rebuilt UI binary was verified as ARM64/aarch64 and contained `Navigation Assist Mode`.
+- The binary was stripped from about 74 MB to about 3.5 MB before copying back to the laptop install branch.
+
+User asked:
+> I noticed my "woo hoo" sound was pretty quiet compared to the others. Is there any way you could "amplify" that specific one and push that up to GitHub too?
+
+Assistant:
+> The WooHoo file peaks at about `-4.7 dB`, so there is room to make it louder without distortion.
+
+Assistant:
+> For the WooHoo sound, I’m going to add `+4 dB`. Its current peak is `-4.7 dB`, so `+4 dB` makes it noticeably louder while still leaving a little headroom instead of clipping.
+
+Result:
+
+- `frogpilot/assets/random_events/sounds/startup.wav` was amplified by `+4 dB`.
+- New measured volume is about `mean=-16.8 dB, max=-0.7 dB`.
+- The audio format remains 48 kHz mono PCM WAV.
