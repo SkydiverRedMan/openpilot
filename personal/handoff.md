@@ -200,6 +200,21 @@ Fix:
 - Copied the fixed `launch_env.sh` directly to `/data/openpilot/launch_env.sh` on the comma.
 - Rebooted the comma so the boot script would source the new environment.
 
+## Resume After Laptop WSL Reboot
+
+Keith is rebooting the laptop to install WSL while the comma is downloading/reinstalling `SkydiverRedMan/bsm-highlander-install`.
+
+When continuing:
+
+1. Ask Keith what happened on the comma install screen after download/finalizing.
+2. Research the internet for how other openpilot/FrogPilot developers build or rebuild the Qt UI for comma hardware:
+   - whether people successfully compile `selfdrive/ui/ui` directly on a comma 3/3X,
+   - whether WSL/Ubuntu cross-compiling is preferred,
+   - what official or community build commands/toolchains are recommended,
+   - and whether committing a stripped `selfdrive/ui/ui` binary into an installer branch is reliable.
+3. Compare that research against what happened here: on-device compile worked, but the rebuilt UI needed explicit Weston display environment variables in `launch_env.sh`.
+4. Before rebuilding UI again, decide whether to use WSL/Ubuntu locally, build on the comma, or avoid binary rebuilds unless absolutely needed.
+
 ## Lane Change / BSM Issue
 
 Observed behavior: FrogPilot starts a nudgeless lane change after the signal delay even when the vehicle mirror blind spot indicator is lit.

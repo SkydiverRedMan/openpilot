@@ -329,3 +329,16 @@ Fix:
 - Added those display defaults to `launch_env.sh`.
 - Copied the fixed file directly to `/data/openpilot/launch_env.sh`.
 - Rebooted the comma so the launch script would pick up the environment fix.
+
+## Rebooting Laptop For WSL - 2026-05-26
+
+User said:
+> while we're waiting, I am going to reboot to install WSL. please add a note so we can continue, and in that note the next thing you should do is research the internet and see if anyone else has compiled the UI stuff on the comma itself, or if they have more luck cross-compiling with ubuntu / wsl
+
+Continuation note:
+
+- The comma was downloading/reinstalling `SkydiverRedMan/bsm-highlander-install`.
+- The install branch latest pushed commit was `5867c78 Set Weston display environment for UI`.
+- First thing after resume: ask Keith what the comma did after download/finalizing.
+- Then research online whether openpilot/FrogPilot UI rebuilds are better done directly on comma hardware or by cross-compiling from Ubuntu/WSL.
+- Include in that research whether committing a rebuilt/stripped `selfdrive/ui/ui` binary to an installer branch is a reliable practice.
