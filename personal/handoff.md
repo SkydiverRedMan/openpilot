@@ -182,6 +182,24 @@ Change made:
 - Volume changed from roughly `mean=-20.8 dB, max=-4.7 dB` to `mean=-16.8 dB, max=-0.7 dB`.
 - The same audio change was applied in both the install worktree and the source worktree.
 
+## Boot Logo Hang After UI Update
+
+After the rebuilt UI update was installed on the comma, the device reached the FrogPilot boot logo but did not show the normal UI.
+
+Findings:
+
+- SSH still worked at `192.168.68.134`, so the device was not bricked.
+- `/data/openpilot` was on commit `e8938a7`.
+- The rebuilt `selfdrive/ui/ui` binary was present and executable.
+- Running the UI without display variables aborted during Qt display/platform initialization.
+- Running the same UI manually with `QT_QPA_PLATFORM=wayland`, `XDG_RUNTIME_DIR=/var/tmp/weston`, and `WAYLAND_DISPLAY=wayland-0` worked.
+
+Fix:
+
+- Added those Weston/Qt display defaults to `launch_env.sh`.
+- Copied the fixed `launch_env.sh` directly to `/data/openpilot/launch_env.sh` on the comma.
+- Rebooted the comma so the boot script would source the new environment.
+
 ## Lane Change / BSM Issue
 
 Observed behavior: FrogPilot starts a nudgeless lane change after the signal delay even when the vehicle mirror blind spot indicator is lit.
