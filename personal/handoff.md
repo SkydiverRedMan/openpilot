@@ -236,6 +236,13 @@ Fix:
 - Hotpatched `/data/openpilot/system/manager/process.py` on the comma, syntax-checked it, converted LF line endings, and rebooted.
 - On the next boot, the first UI attempt still exited `-11`, manager logged `ui exited with -11, restarting`, and the restarted `./ui` stayed running.
 
+Follow-up:
+
+- The manager retry patch prevented a permanent boot-logo hang, but `ui` continued to segfault and restart repeatedly.
+- Temporarily switching active icon and distance-icon theme links back to stock/static assets did not stop the crash loop.
+- On 2026-05-27, the install branch was rolled back to the last known working runtime state from commit `28cc023`: old prebuilt `selfdrive/ui/ui`, original `launch_env.sh`, original `system/manager/process.py`, and pre-amplified `startup.wav`.
+- The source still contains the `Navigation Assist Mode` button, but the old prebuilt UI binary will not show it. This is intentional for stability until a safer UI rebuild path is found.
+
 ## Lane Change / BSM Issue
 
 Observed behavior: FrogPilot starts a nudgeless lane change after the signal delay even when the vehicle mirror blind spot indicator is lit.
