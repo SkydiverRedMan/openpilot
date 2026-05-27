@@ -258,3 +258,6 @@ Created:
 - `personal/random_events_showcase/random_events_assets/`
 - `personal/random_events_showcase/stock_openpilot_sounds/`
 - `personal/random_events_showcase/holiday_theme_sounds/`
+
+Assistant completion note:
+> The random events showcase was created under `personal/random_events_showcase/`, the running assistant message log was saved at `personal/assistant_message_log.md`, and both were committed/pushed to GitHub. The old comma build transfer was stopped; the missing Navigation Assist UI button is still not fixed yet because the prebuilt UI executable has not been rebuilt.
