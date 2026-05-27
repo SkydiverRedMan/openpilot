@@ -1,0 +1,78 @@
+FrogPilot current plan and expired build notes
+Date: 2026-05-27
+
+Current result
+--------------
+Keith confirmed the comma booted successfully after installing:
+
+  SkydiverRedMan/bsm
+
+Expected commit:
+
+  3d2ec297
+
+This branch is now the active comma install target.
+
+What the working install branch contains
+----------------------------------------
+Branch: bsm
+
+Purpose:
+
+- clean prebuilt installer for Keith's Toyota Highlander
+- no personal notes
+- no random-events showcase files
+- old working prebuilt UI binary retained
+
+Included changes:
+
+- Toyota Highlander BSM enablement
+- BSM DBC message/signals for the non-TSS2 Highlander path
+- paramotor boot logo
+- custom startup sound in the direct override path:
+
+    frogpilot/assets/random_events/sounds/startup.wav
+
+Expired install targets
+-----------------------
+Do not use these as the normal comma installer now:
+
+- SkydiverRedMan/bsm-highlander-install
+- SkydiverRedMan/bsm-highlander-clean-install
+
+The second branch was temporary and was deleted from GitHub after being replaced by:
+
+  SkydiverRedMan/bsm
+
+The first branch is historical. It contains useful notes, but it also accumulated personal/random showcase files and failed UI rebuild history.
+
+Active next steps
+-----------------
+1. Verify the comma reports branch `bsm` and commit `3d2ec297`.
+2. Test BSM behavior carefully:
+   - left mirror BSM indicator should map to `carState.leftBlindspot`
+   - right mirror BSM indicator should map to `carState.rightBlindspot`
+3. If left/right are flipped, fix the Toyota BSM parsing before trusting lane-change blocking.
+4. Leave native UI work alone until BSM behavior is verified.
+
+Native UI guidance
+------------------
+Do not retry the previous one-file native UI transplant.
+
+Historical result:
+
+- Building `selfdrive/ui/ui` directly on the comma produced an ARM64 binary.
+- The binary contained the Navigation Assist button text.
+- Installing that one rebuilt binary caused boot-logo/UI instability.
+- Wayland environment tweaks and manager launch workarounds were not enough.
+- Rolling back to the old prebuilt UI restored stability.
+
+Future native UI work should use a complete, matching prebuilt release process from one source commit. If the goal is a personal/test action, prefer The Pond web UI instead of the native Qt UI.
+
+Rules going forward
+-------------------
+1. Keep comma install branches lean.
+2. Keep notes and showcase assets off install branches.
+3. Do not add new persistent params to a prebuilt branch unless the matching compiled params extension is rebuilt.
+4. Direct asset changes such as sounds and boot images are usually safe on prebuilt install branches.
+5. C++ UI, schemas, DBC generator work, and compiled extensions need source-branch discipline and a real build/release path.
