@@ -371,3 +371,4 @@ Follow-up:
 - User asked to roll back to the working GitHub install from before the UI binary was rebuilt.
 - Restored `selfdrive/ui/ui`, `launch_env.sh`, `system/manager/process.py`, and `frogpilot/assets/random_events/sounds/startup.wav` from commit `28cc023`.
 - Result: install branch intentionally keeps the Navigation Assist source button, but uses the older prebuilt UI binary that does not show it.
+- User confirmed the comma UI is working after rollback and asked to note that the next UI rebuild attempt should use WSL/Ubuntu first.
