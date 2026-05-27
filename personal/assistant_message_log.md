@@ -305,3 +305,27 @@ Result:
 - `frogpilot/assets/random_events/sounds/startup.wav` was amplified by `+4 dB`.
 - New measured volume is about `mean=-16.8 dB, max=-0.7 dB`.
 - The audio format remains 48 kHz mono PCM WAV.
+
+## Boot Logo Hang After Rebuilt UI Update - 2026-05-26
+
+User reported:
+> it looked like it was working, checked for update, found update, downloaded update, and now it's been stuck on the boot-up logo for quite a while now
+
+Assistant:
+> The comma is online and SSH is open, so it is not bricked. I’m checking the running openpilot state and recent logs now.
+
+Assistant:
+> The update applied commit `e8938a7`, and the new `ui` binary is present on the device with the Navigation Assist text in it. The screen being stuck now looks like the UI process is repeatedly failing to stay up, so I’m digging into the crash/log source instead of reinstalling.
+
+Diagnosis:
+
+- The comma was reachable at `192.168.68.134`.
+- `manager.py` was running, but no persistent `ui` process was visible.
+- Running `/data/openpilot/selfdrive/ui/ui` without display environment variables aborted during Qt platform initialization.
+- Running the same binary with `QT_QPA_PLATFORM=wayland`, `XDG_RUNTIME_DIR=/var/tmp/weston`, and `WAYLAND_DISPLAY=wayland-0` started successfully.
+
+Fix:
+
+- Added those display defaults to `launch_env.sh`.
+- Copied the fixed file directly to `/data/openpilot/launch_env.sh`.
+- Rebooted the comma so the launch script would pick up the environment fix.
