@@ -1,26 +1,5 @@
 #include "frogpilot/ui/qt/offroad/navigation_settings.h"
 
-#include <algorithm>
-
-#include <QFile>
-#include <QProcess>
-
-namespace {
-void playNavigationAssistSound(int volume) {
-  const QString alert = "prompt";
-  const QString stockPath = "../../selfdrive/assets/sounds/" + alert + ".wav";
-  const QString themePath = "../../frogpilot/assets/active_theme/sounds/" + alert + ".wav";
-  const QString filePath = QFile::exists(themePath) ? themePath : stockPath;
-
-  const int clampedVolume = std::clamp(volume, 0, 100);
-  if (clampedVolume == 0) {
-    return;
-  }
-
-  QProcess::startDetached("ffplay", {"-nodisp", "-autoexit", "-volume", QString::number(clampedVolume), filePath});
-}
-}
-
 FrogPilotNavigationPanel::FrogPilotNavigationPanel(FrogPilotSettingsWindow *parent, bool forceOpen) : FrogPilotListWidget(parent), parent(parent) {
   forceOpenDescriptions = forceOpen;
 
@@ -137,12 +116,7 @@ FrogPilotNavigationPanel::FrogPilotNavigationPanel(FrogPilotSettingsWindow *pare
 
   navigationAssistButton = new ButtonControl(tr("Navigation Assist Mode"), tr("TEST"),
                                              tr("<b>Experimental navigation-assisted decision mode placeholder.</b><br><br>"
-                                                "For now this does not change driving behavior. Pressing the button only refreshes FrogPilot settings and plays a prompt sound."));
-  QObject::connect(navigationAssistButton, &ButtonControl::clicked, [this]() {
-    updateFrogPilotToggles();
-    params_memory.put("TestAlert", "prompt");
-    playNavigationAssistSound(params.getInt("PromptVolume"));
-  });
+                                                "For now this does not change driving behavior."));
   settingsList->addItem(navigationAssistButton);
 
   std::vector<QString> filterButtonNames{tr("CANCEL"), tr("Manually Update Speed Limits")};
