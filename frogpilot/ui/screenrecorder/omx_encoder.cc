@@ -39,10 +39,25 @@ int ABGRToNV12(const uint8_t* src_abgr, int src_stride_abgr,
   int halfwidth = (width + 1) >> 1;
 
   void (*ABGRToUVRow)(const uint8_t* src_abgr0, int src_stride_abgr,
-                      uint8_t* dst_u, uint8_t* dst_v, int width) = ABGRToUVRow_NEON;
-  void (*ABGRToYRow)(const uint8_t* src_abgr, uint8_t* dst_y, int width) = ABGRToYRow_NEON;
+                      uint8_t* dst_u, uint8_t* dst_v, int width) =
+#if defined(__aarch64__) || defined(__arm__)
+    ABGRToUVRow_NEON;
+#else
+    ABGRToUVRow_C;
+#endif
+  void (*ABGRToYRow)(const uint8_t* src_abgr, uint8_t* dst_y, int width) =
+#if defined(__aarch64__) || defined(__arm__)
+    ABGRToYRow_NEON;
+#else
+    ABGRToYRow_C;
+#endif
   void (*MergeUVRow_)(const uint8_t* src_u, const uint8_t* src_v,
-                      uint8_t* dst_uv, int width) = MergeUVRow_NEON;
+                      uint8_t* dst_uv, int width) =
+#if defined(__aarch64__) || defined(__arm__)
+    MergeUVRow_NEON;
+#else
+    MergeUVRow_C;
+#endif
 
   if (!src_abgr || !dst_y || !dst_uv || width <= 0 || height == 0) {
     return -1;
