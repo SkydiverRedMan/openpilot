@@ -595,7 +595,14 @@ class FrogPilotVariables:
     if not is_torque_car:
       CarInterfaceBase.configure_torque_tune(MOCK.MOCK, CP.lateralTuning)
 
-    fpmsg_bytes = params.get("FrogPilotCarParams" if started else "FrogPilotCarParamsPersistent", block=started)
+    fpmsg_bytes = params.get("FrogPilotCarParams" if started else "FrogPilotCarParamsPersistent")
+    if started and not fpmsg_bytes:
+      # Force OnRoad can be used without a persisted FrogPilotCarParams. Don't block
+      # toggle refreshes forever on an empty active param in that case.
+      fpmsg_bytes = params.get("FrogPilotCarParamsPersistent")
+      if not fpmsg_bytes:
+        params.remove("FrogPilotCarParams")
+
     if fpmsg_bytes:
       with custom.FrogPilotCarParams.from_bytes(fpmsg_bytes) as fpcp_reader:
         FPCP = fpcp_reader.as_builder()
