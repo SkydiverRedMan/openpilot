@@ -567,9 +567,13 @@ class FrogPilotVariables:
     level = self.tuning_levels
     toggle = self.frogpilot_toggles
 
+    was_force_onroad = getattr(toggle, "force_onroad", False)
+
     toggle.debug_mode = params.get_bool("DebugMode")
     toggle.force_offroad = params_memory.get_bool("ForceOffroad")
     toggle.force_onroad = params_memory.get_bool("ForceOnroad")
+    if toggle.force_onroad and not was_force_onroad:
+      params_memory.put("TestAlert", "engage")
 
     toggle.tuning_level = params.get_int("TuningLevel") if params.get_bool("TuningLevelConfirmed") else 3
 
