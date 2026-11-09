@@ -61,6 +61,11 @@ class ThemeManager:
     steering_wheel_save_path.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(steering_wheel_image_path, steering_wheel_save_path)
 
+    paramotor_wheel_path = frogpilot_paths.STEERING_WHEELS_PATH / "paramotor.gif"
+    for extension in WHEEL_EXTENSIONS:
+      frogpilot_utilities.delete_path(paramotor_wheel_path.with_suffix(extension))
+    shutil.copy2(Path(__file__).parent / "other_images/paramotor_wheel.gif", paramotor_wheel_path)
+
   def download_theme(self, theme_component, theme_name, repo_url):
     if not repo_url:
       self.download_state.handle_error(None, "GitHub and GitLab are offline...")
