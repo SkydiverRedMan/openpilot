@@ -307,6 +307,21 @@ void FrogPilotAnnotatedCameraWidget::updateState(const UIState &s, const FrogPil
 
   screenRecorderButton->setVisible(!frogpilot_scene.map_open && !standstillTimerRect.intersects(screenRecorderButton->geometry()) && !staticSignalRect.intersects(screenRecorderButton->geometry()) && frogpilot_toggles.value(QLatin1String("screen_recorder")).toBool());
 
+  // Navigation Assist (advisory banner). Hidden unless the switch is on, the
+  // message is fresh, and navigation_assistd says there is something to show.
+  navAssistVisible = false;
+  if (frogpilot_toggles.value(QLatin1String("navigation_assist")).toBool() && fpsm.alive("navigationAssist")) {
+    const cereal::NavigationAssist::Reader &navigationAssist = fpsm["navigationAssist"].getNavigationAssist();
+    navAssistVisible = navigationAssist.getEnabled() && navigationAssist.getDisplayVisible() && navigationAssist.getUrgency() > 0;
+    navAssistDirection = static_cast<int>(navigationAssist.getDirection());
+    navAssistKind = static_cast<int>(navigationAssist.getManeuverKind());
+    navAssistUrgency = navigationAssist.getUrgency();
+    navAssistSynthetic = navigationAssist.getSynthetic();
+    navAssistHeadline = QString::fromStdString(navigationAssist.getHeadline());
+    navAssistDistance = QString::fromStdString(navigationAssist.getDistanceText());
+    navAssistDetail = QString::fromStdString(navigationAssist.getDetail());
+  }
+
   if (!isVisible()) {
     return;
   }
@@ -405,6 +420,10 @@ void FrogPilotAnnotatedCameraWidget::paintFrogPilotWidgets(QPainter &p) {
 
   if (!staticSignalRect.isNull()) {
     paintTurnSignals(p);
+  }
+
+  if (navAssistVisible && !bigMapOpen) {
+    paintNavigationAssist(p);
   }
 
   if (showBottomIcons && !frogpilot_scene.map_open) {
@@ -746,6 +765,133 @@ void FrogPilotAnnotatedCameraWidget::paintPathEdges(QPainter &p) {
   path.addPolygon(track_vertices);
   path.addPolygon(track_edge_vertices);
   p.drawPath(path);
+
+  p.restore();
+}
+
+void FrogPilotAnnotatedCameraWidget::paintNavigationAssist(QPainter &p) {
+  static const QFont headlineFont = InterFont(50, QFont::Bold);
+  static const QFont distanceFont = InterFont(50, QFont::Bold);
+  static const QFont detailFont = InterFont(32, QFont::DemiBold);
+  static const QFont tagFont = InterFont(26, QFont::Bold);
+
+  // Urgency colours: 1 info, 2 approaching, 3 imminent, 4 data warning
+  QColor accent;
+  switch (navAssistUrgency) {
+    case 2: accent = QColor(23, 134, 68); break;
+    case 3: accent = QColor(218, 111, 37); break;
+    case 4: accent = QColor(150, 150, 150); break;
+    default: accent = QColor(255, 255, 255, 140); break;
+  }
+
+  int bannerWidth = std::min(620, width() - 2 * UI_BORDER_SIZE);
+  int bannerHeight = navAssistDetail.isEmpty() && !navAssistSynthetic ? 120 : 160;
+
+  // Top right, under the experimental mode button and the screen recorder / instant replay buttons
+  int top = experimentalButtonPosition.y() + btn_size + UI_BORDER_SIZE / 2;
+  if (screenRecorderButton->isVisible()) {
+    top = std::max(top, screenRecorderButton->geometry().bottom() + UI_BORDER_SIZE / 2);
+  }
+  if (instantReplayButton->isVisible()) {
+    top = std::max(top, instantReplayButton->geometry().bottom() + UI_BORDER_SIZE / 2);
+  }
+  QRect banner(width() - UI_BORDER_SIZE - bannerWidth, top, bannerWidth, bannerHeight);
+  if (!staticSignalRect.isNull() && banner.intersects(staticSignalRect)) {
+    banner.moveTop(staticSignalRect.bottom() + UI_BORDER_SIZE / 2);
+  }
+
+  p.save();
+  p.setRenderHint(QPainter::Antialiasing);
+
+  p.setBrush(blackColor(166));
+  p.setPen(QPen(accent, 8));
+  p.drawRoundedRect(banner, 24, 24);
+
+  QRect iconRect(banner.left() + 20, banner.top() + 15, 90, 90);
+  paintNavigationAssistIcon(p, iconRect, navAssistUrgency == 4 ? QColor(200, 200, 200) : whiteColor());
+
+  int textLeft = iconRect.right() + 20;
+  int textRight = banner.right() - 24;
+
+  QFontMetrics distanceMetrics(distanceFont);
+  int distanceWidth = navAssistDistance.isEmpty() ? 0 : distanceMetrics.horizontalAdvance(navAssistDistance);
+  QRect headlineRow(textLeft, banner.top() + 15, textRight - textLeft, 90);
+  if (distanceWidth > 0) {
+    p.setFont(distanceFont);
+    p.setPen(navAssistUrgency == 2 || navAssistUrgency == 3 ? accent.lighter(130) : whiteColor());
+    p.drawText(headlineRow, Qt::AlignVCenter | Qt::AlignRight, navAssistDistance);
+  }
+
+  p.setFont(headlineFont);
+  p.setPen(whiteColor());
+  QRect headlineRect = headlineRow.adjusted(0, 0, -(distanceWidth + (distanceWidth > 0 ? 20 : 0)), 0);
+  p.drawText(headlineRect, Qt::AlignVCenter | Qt::AlignLeft, QFontMetrics(headlineFont).elidedText(navAssistHeadline, Qt::ElideRight, headlineRect.width()));
+
+  if (bannerHeight > 120) {
+    QRect detailRect(banner.left() + 20, headlineRow.bottom() + 2, banner.width() - 44, banner.bottom() - headlineRow.bottom() - 14);
+    int tagWidth = 0;
+    if (navAssistSynthetic) {
+      p.setFont(tagFont);
+      QString tag = tr("TEST DATA");
+      tagWidth = QFontMetrics(tagFont).horizontalAdvance(tag) + 24;
+      QRect tagRect(detailRect.left(), detailRect.center().y() - 20, tagWidth, 40);
+      p.setPen(Qt::NoPen);
+      p.setBrush(purpleColor(220));
+      p.drawRoundedRect(tagRect, 10, 10);
+      p.setPen(whiteColor());
+      p.drawText(tagRect, Qt::AlignCenter, tag);
+      tagWidth += 14;
+    }
+    p.setFont(detailFont);
+    p.setPen(whiteColor(200));
+    QRect textRect = detailRect.adjusted(tagWidth, 0, 0, 0);
+    p.drawText(textRect, Qt::AlignVCenter | Qt::AlignLeft, QFontMetrics(detailFont).elidedText(navAssistDetail, Qt::ElideRight, textRect.width()));
+  }
+
+  p.restore();
+}
+
+void FrogPilotAnnotatedCameraWidget::paintNavigationAssistIcon(QPainter &p, const QRect &rect, const QColor &color) {
+  // Direction (cereal NavigationAssist.Direction):
+  //   0 none, 1 left, 2 right, 3 straight, 4 slightLeft, 5 slightRight, 6 sharpLeft, 7 sharpRight, 8 uturn
+  // ManeuverKind: 8 arrive, 9 uturn
+  p.save();
+  p.translate(rect.center());
+  p.setPen(QPen(color, 12, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+  p.setBrush(Qt::NoBrush);
+
+  if (navAssistUrgency == 4) {
+    // Data warning: exclamation mark in a circle
+    p.setPen(QPen(color, 8, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    p.drawEllipse(QPointF(0, 0), 38, 38);
+    p.drawLine(QPointF(0, -20), QPointF(0, 6));
+    p.drawPoint(QPointF(0, 20));
+  } else if (navAssistDirection == 8 || navAssistKind == 9) {
+    QPainterPath uturn;
+    uturn.moveTo(18, 36);
+    uturn.lineTo(18, -10);
+    uturn.arcTo(QRectF(-22, -34, 40, 48), 0, 180);
+    uturn.lineTo(-22, 20);
+    p.drawPath(uturn);
+    p.drawLine(QPointF(-22, 24), QPointF(-36, 8));
+    p.drawLine(QPointF(-22, 24), QPointF(-8, 8));
+  } else if (navAssistKind == 8 && (navAssistDirection == 0 || navAssistDirection == 3)) {
+    // Arrival: map pin
+    p.drawEllipse(QPointF(0, -10), 22, 22);
+    p.drawLine(QPointF(0, 12), QPointF(0, 38));
+  } else {
+    static const QHash<int, float> angles = {
+      {0, 0.0f}, {1, -90.0f}, {2, 90.0f}, {3, 0.0f}, {4, -45.0f}, {5, 45.0f}, {6, -135.0f}, {7, 135.0f},
+    };
+    float angle = angles.value(navAssistDirection, 0.0f);
+
+    // Stem comes up from the bottom, then the arrow points toward the maneuver side
+    p.drawLine(QPointF(0, 40), QPointF(0, 0));
+    p.rotate(angle);
+    p.drawLine(QPointF(0, 0), QPointF(0, -36));
+    p.drawLine(QPointF(0, -38), QPointF(-16, -20));
+    p.drawLine(QPointF(0, -38), QPointF(16, -20));
+  }
 
   p.restore();
 }

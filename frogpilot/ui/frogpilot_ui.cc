@@ -62,7 +62,7 @@ FrogPilotUIState::FrogPilotUIState(QObject *parent) : QObject(parent) {
   sm = std::make_unique<SubMaster, const std::initializer_list<const char *>>({
     "carControl", "frogpilotAccountState", "frogpilotCarState", "frogpilotControlsState",
     "frogpilotDeviceState", "frogpilotNavigation", "frogpilotPlan", "frogpilotProcessState", "frogpilotRadarState", "frogpilotSignReading", "liveDelay",
-    "liveParameters", "liveTorqueParameters", "liveTracks"
+    "liveParameters", "liveTorqueParameters", "liveTracks", "navigationAssist"
   });
 
   wifi = new WifiManager(this);

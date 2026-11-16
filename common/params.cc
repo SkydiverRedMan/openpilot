@@ -413,6 +413,8 @@ std::unordered_map<std::string, uint32_t> keys = {
     {"ModelRandomizer", PERSISTENT},
     {"ModelUI", PERSISTENT},
     {"ModelVersions", PERSISTENT},
+    {"NavigationAssist", PERSISTENT},
+    {"NavigationAssistSynthetic", CLEAR_ON_MANAGER_START | DONT_LOG},
     {"NavigationUI", PERSISTENT},
     {"NewLongAPI", PERSISTENT},
     {"NNFF", PERSISTENT},

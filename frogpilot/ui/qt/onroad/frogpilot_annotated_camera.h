@@ -68,6 +68,8 @@ private:
   void paintCEMStatus(QPainter &p, const QPoint &position);
   void paintCompass(QPainter &p, const QPoint &position);
   void paintCurveSpeedControl(QPainter &p);
+  void paintNavigationAssist(QPainter &p);
+  void paintNavigationAssistIcon(QPainter &p, const QRect &rect, const QColor &color);
   void paintPausedIcon(QPainter &p, const QPoint &position, const QPixmap &icon);
   void paintPedalIcons(QPainter &p);
   void paintPendingSpeedLimit(QPainter &p);
@@ -95,6 +97,8 @@ private:
   bool experimentalMode = false;
   bool forceCoast = false;
   bool lateralPaused = false;
+  bool navAssistSynthetic = false;
+  bool navAssistVisible = false;
   bool longitudinalPaused = false;
   bool redLight = false;
   bool signalIsGif = false;
@@ -102,6 +106,9 @@ private:
   bool weatherDaytime = false;
 
   int desiredFollowDistance = 0;
+  int navAssistDirection = 0;
+  int navAssistKind = 0;
+  int navAssistUrgency = 0;
   int signalAnimationLength = 0;
   int signalHeight = 0;
   int signalWidth = 0;
@@ -128,6 +135,10 @@ private:
   float vEgo = 0.0f;
 
   std::string speedLimitSource;
+
+  QString navAssistDetail;
+  QString navAssistDistance;
+  QString navAssistHeadline;
 
   DrivingPersonalityButton *personalityButton;
   InstantReplayButton *instantReplayButton;

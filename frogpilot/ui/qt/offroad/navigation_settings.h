@@ -32,6 +32,7 @@ private:
   ButtonControl *amapKeyControl = nullptr;
   ButtonControl *setupButton = nullptr;
 
+  ParamControl *navigationAssistToggle = nullptr;
   ParamControl *pairingToggle = nullptr;
   ParamControl *speedLimitFillerToggle = nullptr;
 

@@ -43,7 +43,8 @@ CAMERA_OFFSET = 0.04
 REPLAY = "REPLAY" in os.environ
 SIMULATION = "SIMULATION" in os.environ
 TESTING_CLOSET = "TESTING_CLOSET" in os.environ
-IGNORE_PROCESSES = {"loggerd", "encoderd", "statsd"}
+# FrogPilot variables: navigation_assistd is advisory only and must never block engagement
+IGNORE_PROCESSES = {"loggerd", "encoderd", "statsd", "navigation_assistd"}
 
 ThermalStatus = log.DeviceState.ThermalStatus
 State = log.ControlsState.OpenpilotState
