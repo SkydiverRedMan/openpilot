@@ -7,7 +7,9 @@
 # is a local git commit that tools/na2/publish_from_pc.sh fetches and pushes.
 #
 # Run from the PC (car parked, comma on Wi-Fi):
-#   ssh comma@<comma-ip> 'bash -s' < tools/na2/build_on_device.sh
+#   ssh comma@<comma-ip> "cat > /data/na2_build.sh" < tools/na2/build_on_device.sh
+#   ssh comma@<comma-ip> "setsid nohup bash /data/na2_build.sh > /data/na2_build.log 2>&1 < /dev/null &"
+#   ssh comma@<comma-ip> "tail -f /data/na2_build.log"     # watch; safe to disconnect
 #
 # openpilot is stopped while compiling and restarted afterwards, even on failure.
 set -euo pipefail
@@ -25,7 +27,9 @@ if [ "$(cat /data/params/d/IsOnroad 2>/dev/null || echo 0)" = "1" ]; then
   exit 1
 fi
 
+set +u
 source /etc/profile
+set -u
 
 log "Preparing $WORK"
 rm -rf "$WORK"
