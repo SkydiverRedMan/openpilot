@@ -997,6 +997,7 @@ SETTING_LABELS = {
   "Model": {"name": "Driving Model"},
   "ModelRandomizer": {"name": "Model Randomizer"},
   "ModelUI": {"name": "Model UI"},
+  "NavigationAssist": {"name": "Navigation Assist"},
   "NavigationUI": {"name": "Navigation Widgets"},
   "NavSettingLeftSide": {"name": "Show Map on Left Side of UI"},
   "NavSettingTime24h": {"name": "Show ETA in 24h Format"},
@@ -1419,6 +1420,7 @@ frogpilot_default_params: list[tuple[str, str | bytes, int, str]] = [
   ("ModelRandomizer", "0", 2, "0"),
   ("ModelUI", "1", 2, "0"),
   ("ModelVersions", "", 2, ""),
+  ("NavigationAssist", "0", 0, "0"),
   ("NavigationUI", "1", 1, "0"),
   ("NavSettingLeftSide", "0", 0, "0"),
   ("NavSettingTime24h", "0", 0, "0"),
@@ -2113,6 +2115,8 @@ class FrogPilotVariables:
     toggle.road_name_ui = self.get_value("RoadNameUI", condition=navigation_ui) or toggle.debug_mode
     toggle.show_speed_limits = self.get_value("ShowSpeedLimits", condition=navigation_ui) or toggle.debug_mode
     toggle.speed_limit_vienna = self.get_value("UseVienna", condition=navigation_ui)
+
+    toggle.navigation_assist = self.get_value("NavigationAssist")
 
     if not started or toggle.car_make != "hyundai":
       toggle.old_long_api = toggle.openpilot_longitudinal and toggle.car_make == "gm" and toggle.has_cc_long and not has_pedal

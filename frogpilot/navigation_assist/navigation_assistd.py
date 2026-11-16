@@ -1,0 +1,205 @@
+#!/usr/bin/env python3
+"""navigation_assistd: publishes the advisory navigationAssist message.
+
+Inputs (read only):  navInstruction (navd), frogpilotNavigation (navd), carState,
+                     NavigationAssist / NavDestination / IsMetric params.
+Output:              navigationAssist, read by the onroad UI.
+
+This process never publishes anything that steering, gas, brake, turn signals or
+lane-change logic consume. If it crashes, controlsd ignores it (see
+IGNORE_PROCESSES) and openpilot keeps driving normally; the UI simply hides the
+Navigation Assist banner once its message goes stale.
+"""
+from __future__ import annotations
+
+import time
+
+from openpilot.frogpilot.navigation_assist.engine import (
+  Advisory, EngineInputs, Maneuver, NavSnapshot, NavigationAssistEngine,
+)
+from openpilot.frogpilot.navigation_assist.synthetic import SCENARIOS
+
+RATE_HZ = 5.0
+PARAM_POLL_INTERVAL = 0.5        # s; how fast turning the switch off takes effect
+SYNTHETIC_MAX_SPEED = 0.5        # m/s; synthetic scenarios end once the car moves
+
+# Advisory attribute -> navigationAssist field
+FIELD_MAP = {
+  "enabled": "enabled",
+  "state": "state",
+  "kind": "maneuverKind",
+  "direction": "direction",
+  "maneuver_distance": "maneuverDistance",
+  "time_to_maneuver": "timeToManeuver",
+  "confidence": "confidence",
+  "display_visible": "displayVisible",
+  "urgency": "urgency",
+  "headline": "headline",
+  "distance_text": "distanceText",
+  "detail": "detail",
+  "route_changed": "routeChanged",
+  "route_change_count": "routeChangeCount",
+  "navigation_age": "navigationAge",
+}
+
+
+def advisory_fields(advisory: Advisory, synthetic: bool) -> dict:
+  fields = {capnp_name: getattr(advisory, attr) for attr, capnp_name in FIELD_MAP.items()}
+  fields["synthetic"] = synthetic
+  return fields
+
+
+def snapshot_from_nav_instruction(valid: bool, nav) -> NavSnapshot:
+  """Convert a navInstruction reader into a NavSnapshot."""
+  return NavSnapshot(
+    valid=valid,
+    maneuver_distance=float(nav.maneuverDistance),
+    maneuver_type=str(nav.maneuverType),
+    maneuver_modifier=str(nav.maneuverModifier),
+    primary_text=str(nav.maneuverPrimaryText),
+    secondary_text=str(nav.maneuverSecondaryText),
+    distance_remaining=float(nav.distanceRemaining),
+    all_maneuvers=[Maneuver(float(m.distance), str(m.type), str(m.modifier)) for m in nav.allManeuvers],
+    lane_count=len(nav.lanes),
+  )
+
+
+class NavigationAssistDaemon:
+  def __init__(self, sm, pm, params, params_memory, clock=time.monotonic):
+    self.sm = sm
+    self.pm = pm
+    self.params = params
+    self.params_memory = params_memory
+    self.clock = clock
+
+    self.engine = NavigationAssistEngine()
+
+    self.enabled = False
+    self.destination_set = False
+    self.is_metric = False
+    self.last_param_poll = -1e9
+
+    self.nav: NavSnapshot | None = None
+    self.nav_received_at: float | None = None
+
+    self.synthetic_name: str | None = None
+    self.synthetic_started: float = 0.0
+    self.last_state: str | None = None
+
+  def poll_params(self, now: float) -> None:
+    if now - self.last_param_poll < PARAM_POLL_INTERVAL:
+      return
+    self.last_param_poll = now
+    self.enabled = self.params.get_bool("NavigationAssist")
+    self.destination_set = bool(self.params.get("NavDestination"))
+    self.is_metric = self.params.get_bool("IsMetric")
+
+    name = self.params_memory.get("NavigationAssistSynthetic", encoding="utf-8") or None
+    if name not in SCENARIOS:
+      name = None
+    if name != self.synthetic_name:
+      self.synthetic_name = name
+      self.synthetic_started = now
+      self.engine.reset()
+      self.nav = None
+      self.nav_received_at = None
+
+  def vehicle_moving(self) -> bool:
+    return self.sm.seen["carState"] and self.sm["carState"].vEgo > SYNTHETIC_MAX_SPEED
+
+  def step(self) -> dict:
+    self.sm.update(0)
+    now = self.clock()
+    self.poll_params(now)
+
+    nav_updated = False
+    position_valid = True
+    v_ego = self.sm["carState"].vEgo if self.sm.seen["carState"] else 0.0
+    destination_set = self.destination_set
+
+    if self.synthetic_name is not None and self.vehicle_moving():
+      # Safety: synthetic data is for a parked car only.
+      self.params_memory.remove("NavigationAssistSynthetic")
+      self.synthetic_name = None
+      self.engine.reset()
+      self.nav = None
+      self.nav_received_at = None
+
+    if self.synthetic_name is not None:
+      scenario = SCENARIOS[self.synthetic_name]
+      t = now - self.synthetic_started
+      snapshot = scenario.snapshot(t)
+      v_ego = scenario.speed
+      destination_set = True
+      if snapshot is not None and (self.nav_received_at is None or now - self.nav_received_at >= 1.0):
+        self.nav = snapshot
+        self.nav_received_at = now
+        nav_updated = True
+    else:
+      if self.sm.updated["navInstruction"]:
+        self.nav = snapshot_from_nav_instruction(self.sm.valid["navInstruction"], self.sm["navInstruction"])
+        self.nav_received_at = now
+        nav_updated = True
+      if self.sm.seen["frogpilotNavigation"]:
+        position_valid = self.sm.valid["frogpilotNavigation"]
+
+    advisory = self.engine.update(EngineInputs(
+      now=now,
+      enabled=self.enabled,
+      destination_set=destination_set,
+      v_ego=v_ego,
+      nav=self.nav,
+      nav_received_at=self.nav_received_at,
+      nav_updated=nav_updated,
+      position_valid=position_valid,
+      is_metric=self.is_metric,
+    ))
+
+    if advisory.state != self.last_state:
+      self.log_transition(advisory)
+      self.last_state = advisory.state
+
+    fields = advisory_fields(advisory, self.synthetic_name is not None)
+    self.pm.send("navigationAssist", fields)
+    return fields
+
+  def log_transition(self, advisory: Advisory) -> None:
+    try:
+      from openpilot.common.swaglog import cloudlog
+      cloudlog.event("navigation_assist.state", state=advisory.state, kind=advisory.kind, direction=advisory.direction,
+                     distance=round(advisory.maneuver_distance), confidence=round(advisory.confidence, 2),
+                     synthetic=self.synthetic_name is not None)
+    except Exception:
+      pass
+
+
+class _PubMaster:
+  """Adapter so the daemon can hand plain dicts to cereal's PubMaster."""
+  def __init__(self, messaging):
+    self.messaging = messaging
+    self.pm = messaging.PubMaster(["navigationAssist"])
+
+  def send(self, service: str, fields: dict) -> None:
+    msg = self.messaging.new_message(service, valid=True)
+    out = getattr(msg, service)
+    for key, value in fields.items():
+      setattr(out, key, value)
+    self.pm.send(service, msg)
+
+
+def main():
+  import cereal.messaging as messaging
+  from openpilot.common.params import Params
+  from openpilot.common.realtime import Ratekeeper
+
+  sm = messaging.SubMaster(["navInstruction", "frogpilotNavigation", "carState"])
+  daemon = NavigationAssistDaemon(sm, _PubMaster(messaging), Params(), Params("/dev/shm/params"))
+
+  rk = Ratekeeper(RATE_HZ, print_delay_threshold=None)
+  while True:
+    daemon.step()
+    rk.keep_time()
+
+
+if __name__ == "__main__":
+  main()

@@ -2422,6 +2422,7 @@ struct Event {
     frogpilotUIEvent @107 :Custom.FrogPilotUIEvent;
     frogpilotUIRequest @132 :Custom.FrogPilotUIRequest;
     thePondRequest @134 :Custom.ThePondRequest;
+    navigationAssist @136 :Custom.NavigationAssist;
 
     # *********** legacy + deprecated ***********
     model @9 :Legacy.ModelData; # TODO: rename modelV2 and mark this as deprecated

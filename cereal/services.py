@@ -108,6 +108,7 @@ _services: dict[str, tuple] = {
   "frogpilotSignReading": (True, 2., 1),
   "frogpilotUIEvent": (True, 0., 1),
   "frogpilotUIRequest": (False, 0.),
+  "navigationAssist": (True, 5., 5),
   "thePondRequest": (False, 0.),
 }
 SERVICE_LIST = {name: Service(*vals) for

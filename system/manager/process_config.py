@@ -60,6 +60,9 @@ def run_frogpilot_telemetry(started, params, CP: car.CarParams, frogpilot_toggle
   uploads_allowed = allow_uploads(started, params, CP, frogpilot_toggles)
   return frogpilot_toggles.frogpilot_telemetry and not frogpilot_toggles.no_logging and uploads_allowed
 
+def run_navigation_assist(started, params, CP: car.CarParams, frogpilot_toggles) -> bool:
+  return started and getattr(frogpilot_toggles, "navigation_assist", False)
+
 def run_navigation_modeld(started, params, CP: car.CarParams, frogpilot_toggles) -> bool:
   return started and frogpilot_utilities.use_navigation_model(frogpilot_toggles.model)
 
@@ -142,6 +145,7 @@ procs = [
   PythonProcess("frogpilot_process", "frogpilot.frogpilot_process", always_run),
   PythonProcess("frogpilot_telemetry", "frogpilot.system.frogpilot_telemetry", run_frogpilot_telemetry, enabled=not PC),
   NativeProcess("mapd", "frogpilot/navigation", ["./mapd"], always_run),
+  PythonProcess("navigation_assistd", "frogpilot.navigation_assist.navigation_assistd", run_navigation_assist),
   PythonProcess("speed_limit_capture", "frogpilot.system.speed_limit_capture", run_speed_limit_capture, enabled=not PC),
   PythonProcess("speed_limit_reader", "frogpilot.system.speed_limit_reader", run_speed_limit_reader, enabled=not PC),
   NativeProcess("tailscaled", str(frogpilot_paths.TAILSCALE_PATH), ["./tailscaled", "--tun=userspace-networking",

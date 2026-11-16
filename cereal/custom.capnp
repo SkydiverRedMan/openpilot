@@ -339,3 +339,65 @@ struct FrogPilotUIRequest @0xcd96dafb67a082d0 {
 struct ThePondRequest @0xb86e6369214c01c8 {
   request @0 :FrogPilotUIRequest;
 }
+
+# Navigation Assist (advisory only; published by frogpilot/navigation_assist/navigation_assistd.py, read by the onroad UI)
+struct NavigationAssist @0x9ee1e6b43b301f89 {
+  enabled @0 :Bool;                 # NavigationAssist master switch
+  state @1 :State;
+  maneuverKind @2 :ManeuverKind;
+  direction @3 :Direction;
+  maneuverDistance @4 :Float32;     # m to the next actionable maneuver
+  timeToManeuver @5 :Float32;       # s at the current speed
+  confidence @6 :Float32;           # 0..1; maneuver is shown only when high enough
+  displayVisible @7 :Bool;          # UI should draw the banner
+  urgency @8 :UInt8;                # 0 hidden, 1 info, 2 approaching, 3 imminent, 4 data warning
+  headline @9 :Text;                # e.g. "EXIT RIGHT"
+  distanceText @10 :Text;           # e.g. "1.8 MI", already in the driver's units
+  detail @11 :Text;                 # e.g. "Exit 45: NY-12 North"
+  routeChanged @12 :Bool;           # route changed in the last few seconds
+  routeChangeCount @13 :UInt32;
+  navigationAge @14 :Float32;       # s since the last navInstruction, -1 if never
+  synthetic @15 :Bool;              # data comes from a bench test scenario
+
+  enum State @0xb5717a8b6d7ce21e {
+    disabled @0;
+    navigationInactive @1;
+    navigationActive @2;
+    noUpcomingManeuver @3;
+    maneuverApproaching @4;
+    maneuverImminent @5;
+    routeUnavailable @6;
+    insufficientInformation @7;
+    # Milestone 2 (not produced yet)
+    prepareLeft @8;
+    prepareRight @9;
+    alreadyPositioned @10;
+    trafficDetected @11;
+  }
+
+  enum ManeuverKind @0xc78d3846e6a74e3e {
+    none @0;
+    turn @1;
+    offRamp @2;
+    fork @3;
+    merge @4;
+    onRamp @5;
+    roundabout @6;
+    continueRoute @7;
+    arrive @8;
+    uturn @9;
+    other @10;
+  }
+
+  enum Direction @0x80b1277adaefcf37 {
+    none @0;
+    left @1;
+    right @2;
+    straight @3;
+    slightLeft @4;
+    slightRight @5;
+    sharpLeft @6;
+    sharpRight @7;
+    uturn @8;
+  }
+}

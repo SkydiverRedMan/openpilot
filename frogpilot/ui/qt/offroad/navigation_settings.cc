@@ -182,6 +182,18 @@ FrogPilotNavigationPanel::FrogPilotNavigationPanel(FrogPilotSettingsWindow *pare
                                             "");
   settingsList->addItem(speedLimitFillerToggle);
 
+  navigationAssistToggle = new ParamControl("NavigationAssist", tr("Navigation Assist"),
+                                            tr("<b>Shows the next maneuver of your navigation route and how far away it is on the driving screen.</b><br><br>"
+                                               "For example \"EXIT RIGHT 1.8 MI\" when an exit is coming up. The banner gets more prominent as the maneuver gets close, "
+                                               "and is hidden when navigation data is stale or unreliable.<br><br>"
+                                               "Advisory only: it never steers, changes lanes, signals, or changes speed, and turning it off does not affect "
+                                               "openpilot, navigation, lane changes, or \"Conditional Experimental Mode\". You stay responsible for checking traffic and changing lanes."),
+                                            "");
+  QObject::connect(navigationAssistToggle, &ToggleControl::toggleFlipped, [](bool state) {
+    frogpilotUIState()->updateToggles();
+  });
+  settingsList->addItem(navigationAssistToggle);
+
   ScrollView *settingsPanel = new ScrollView(settingsList, this);
   primelessLayout->addWidget(settingsPanel);
 
@@ -195,6 +207,7 @@ FrogPilotNavigationPanel::FrogPilotNavigationPanel(FrogPilotSettingsWindow *pare
   toggles["MapboxPublicKey"] = publicMapboxKeyControl;
   toggles["MapboxSecretKey"] = secretMapboxKeyControl;
   toggles["MapboxSetup"] = setupButton;
+  toggles["NavigationAssist"] = navigationAssistToggle;
   toggles["SearchInput"] = searchProviderControl;
   toggles["SpeedLimitFiller"] = speedLimitFillerToggle;
   toggles["ThePondPairing"] = pairingToggle;
@@ -214,6 +227,7 @@ void FrogPilotNavigationPanel::showEvent(QShowEvent *event) {
 
   setupCompleted = mapboxPublicKeySet && mapboxSecretKeySet;
 
+  navigationAssistToggle->setVisible(parent->tuningLevel >= parent->frogpilotToggleLevels.value("NavigationAssist").toDouble());
   pairingToggle->setVisible(parent->tuningLevel >= parent->frogpilotToggleLevels.value("ThePondPairing").toDouble());
   speedLimitFillerToggle->setVisible(parent->tuningLevel >= parent->frogpilotToggleLevels.value("SpeedLimitFiller").toDouble());
 }
