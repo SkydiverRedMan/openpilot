@@ -5,9 +5,14 @@
 * Milestone 2 lane advice only knows whether the camera sees *a* lane beside the car, not how many lanes there are or
   which exact lane the exit uses. "IN EXIT LANE" means "no lane to your right", which is usually but not always the
   exit lane (two-lane exits, lane drops). Mapbox lane guidance helps only where Mapbox has it.
-* Traffic warnings depend on the Highlander's blind spot signals reaching openpilot. As of 2026-11-16 that is being
-  checked against stored drive logs; if the signals never arrive, only the front radar's adjacent-lane targets can
-  trigger a warning, and the banner always says to check mirrors.
+* **The Highlander's blind spot state does not reach openpilot** (checked 2026-11-16 against all 22 stored drives,
+  about 6 hours above 10 mph): `carState.leftBlindspot/rightBlindspot` were never true. The CAN message openpilot
+  reads, 0x3F6 "BSM", is present on this TSS-P Highlander but is a static 1 Hz status frame (`80ca020000000000`
+  every time: the "enabled" bits set, the adjacent/approaching bits always 0). On TSS2 Toyotas that message carries
+  the live mirror-light state; on this car it doesn't. Consequences: openpilot's lane-change blind-spot check never
+  blocks (what Keith observed), and Navigation Assist's traffic warning can only come from the front radar's
+  adjacent-lane targets. Likely fix (separate project): poll the blind spot module over diagnostic CAN, as some
+  community forks do for TSS-P Toyotas, which needs care with panda safety; verify first with a recorded drive.
 * No sound. An optional sound (off by default) is planned for Milestone 3.
 * Thresholds (3.2 km / 100 s approaching, 400 m / 15 s imminent) are first guesses. They need tuning from real drives
   at 85-90 mph.
