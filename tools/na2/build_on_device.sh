@@ -94,5 +94,9 @@ grep -q "navigationAssist" selfdrive/ui/ui
 git diff --quiet "$BASE_SHA" "$RELEASE_SHA" -- panda/board/obj || log "NOTE: panda firmware differs from current $RELEASE_BRANCH"
 
 echo "$RELEASE_SHA" > "$WORK/RELEASE_SHA"
+
+# The clone is partial (blob:none), which cannot serve a git fetch reliably, so hand the
+# release to the PC as a bundle holding only what is new relative to both parents.
+git bundle create "$WORK/release.bundle" release "^$BASE_SHA" "^$SOURCE_SHA"
 log "Done. Release commit $RELEASE_SHA is in $WORK/release (branch 'release')."
 log "On the PC run: tools/na2/publish_from_pc.sh <comma-ip>"

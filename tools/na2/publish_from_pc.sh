@@ -22,7 +22,11 @@ git fetch "$REMOTE" "+refs/heads/$RELEASE_BRANCH:refs/remotes/$REMOTE/$RELEASE_B
 CURRENT="$(git rev-parse "refs/remotes/$REMOTE/$RELEASE_BRANCH")"
 
 log "Fetching the release built on the comma ($IP)"
-git fetch "ssh://comma@$IP$WORK/release" "+refs/heads/release:refs/remotes/device/release"
+git fetch "$REMOTE" "+refs/heads/na2-src:refs/remotes/$REMOTE/na2-src"   # the bundle's source parent
+BUNDLE="$(git rev-parse --git-dir)/na2-release.bundle"
+scp -q "comma@$IP:$WORK/release.bundle" "$BUNDLE"
+git bundle verify "$BUNDLE" >/dev/null
+git fetch "$BUNDLE" "+refs/heads/release:refs/remotes/device/release"
 RELEASE="$(git rev-parse refs/remotes/device/release)"
 
 log "Checking $RELEASE"
@@ -30,8 +34,12 @@ git merge-base --is-ancestor "$CURRENT" "$RELEASE" || { log "Release is not buil
 for f in prebuilt selfdrive/ui/ui common/params_pyx.so frogpilot/navigation_assist/navigation_assistd.py launch_openpilot.sh; do
   git cat-file -e "$RELEASE:$f" || { log "missing $f"; exit 1; }
 done
-git cat-file -p "$RELEASE:selfdrive/ui/ui" | head -c 20 | od -An -tx1 | grep -q "7f 45 4c 46 02 01 01 00" || { log "selfdrive/ui/ui is not a 64-bit ELF"; exit 1; }
-git cat-file -p "$RELEASE:selfdrive/ui/ui" | head -c 20 | od -An -tx1 | tr -d ' \n' | grep -q "b700$" || { log "selfdrive/ui/ui is not aarch64"; exit 1; }
+UI_BIN="$(git rev-parse --git-dir)/na2-release-ui"
+git cat-file blob "$RELEASE:selfdrive/ui/ui" > "$UI_BIN"
+UI_HEADER="$(od -An -tx1 -N20 "$UI_BIN" | tr -d ' \n')"
+rm -f "$UI_BIN"
+[[ "$UI_HEADER" == 7f454c46020101* ]] || { log "selfdrive/ui/ui is not a 64-bit little-endian ELF"; exit 1; }
+[[ "$UI_HEADER" == *b700 ]] || { log "selfdrive/ui/ui is not aarch64"; exit 1; }
 if git ls-tree -r --name-only "$RELEASE" | grep -q "^frogpilot/navigation_assist/tests/"; then log "tests leaked into release"; exit 1; fi
 
 log "Files changed versus current $RELEASE_BRANCH:"
