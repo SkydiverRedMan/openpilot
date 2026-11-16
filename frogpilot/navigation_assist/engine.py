@@ -7,11 +7,17 @@ Advisory objects back into the navigationAssist message.
 This module is advisory only. It never produces anything that reaches steering,
 gas, brake, turn signals or lane-change logic.
 
-Milestone 1 scope: understand the route (active / inactive / stale / rerouted),
+Milestone 1: understand the route (active / inactive / stale / rerouted),
 extract the next actionable maneuver, its side and distance, and decide how
-prominently to show it. Lane-level advice (PREPARE_LEFT / PREPARE_RIGHT /
-ALREADY_POSITIONED / TRAFFIC_DETECTED) is reserved in the state list for
-Milestone 2 and is never emitted yet.
+prominently to show it.
+
+Milestone 2: once a left/right maneuver is approaching, compare its side with
+the lanes the camera model sees next to the car and say whether to move over
+(PREPARE_LEFT / PREPARE_RIGHT), that the car is already on that side
+(ALREADY_POSITIONED), or that a vehicle was detected on that side
+(TRAFFIC_DETECTED). It never says a lane is clear: an empty blind spot only
+means nothing was detected, so the driver is always told to check mirrors.
+When lane data is missing it says so instead of guessing.
 """
 from __future__ import annotations
 
@@ -32,7 +38,7 @@ MANEUVER_APPROACHING = "maneuverApproaching"
 MANEUVER_IMMINENT = "maneuverImminent"
 ROUTE_UNAVAILABLE = "routeUnavailable"
 INSUFFICIENT_INFORMATION = "insufficientInformation"
-# Reserved for Milestone 2. Never produced by this version.
+# Milestone 2 lane advice
 PREPARE_LEFT = "prepareLeft"
 PREPARE_RIGHT = "prepareRight"
 ALREADY_POSITIONED = "alreadyPositioned"
@@ -70,6 +76,7 @@ URGENCY_INFO = 1
 URGENCY_APPROACHING = 2
 URGENCY_IMMINENT = 3
 URGENCY_WARNING = 4  # data problem (stale / uncertain)
+URGENCY_TRAFFIC = 5  # vehicle detected on the side the driver needs to move to
 
 # ---------------------------------------------------------------------------
 # Tuning. Distances in metres, times in seconds.
@@ -93,6 +100,12 @@ MIN_SPEED_FOR_TIME = 5.0       # m/s floor so a stopped car does not divide by z
 
 CONFIDENCE_THRESHOLD = 0.6     # below this the maneuver is not shown
 CONSISTENCY_SLACK = 60.0       # m of disagreement between navd and odometry tolerated per update
+
+# Milestone 2: lane position
+MIN_ADJACENT_LANE_WIDTH = 2.5  # m; FrogPilot's lane width estimate reads 0 when no lane is beside the car
+LANE_STATE_HOLD = 1.0          # s the camera's lane estimate must agree before the advice changes
+RADAR_ALONGSIDE_DISTANCE = 15.0  # m; adjacent-lane radar target this close counts as alongside
+LANE_ADVICE_KINDS = {KIND_EXIT, KIND_FORK, KIND_TURN, KIND_ON_RAMP}
 
 METERS_PER_MILE = 1609.344
 METERS_PER_FOOT = 0.3048
@@ -146,7 +159,7 @@ class NavSnapshot:
   secondary_text: str = ""
   distance_remaining: float = 0.0
   all_maneuvers: list[Maneuver] = field(default_factory=list)
-  lane_count: int = 0          # informational for Milestone 2
+  lanes_active: list[bool] = field(default_factory=list)  # Mapbox lane guidance, left to right; True = usable for the maneuver
 
 
 @dataclass
@@ -160,6 +173,16 @@ class EngineInputs:
   nav_updated: bool = False           # nav is a new message this cycle
   position_valid: bool = True         # frogpilotNavigation.valid (localizer ok and on route)
   is_metric: bool = False
+  # Milestone 2 (all optional; None = unknown)
+  lane_info_valid: bool = False       # camera lane estimate is meaningful right now
+  lane_info_expected: bool = False    # lane estimate would normally exist (above FrogPilot's lane change speed)
+  lane_width_left: float = 0.0        # m, frogpilotPlan.laneWidthLeft (0 = no lane to the left)
+  lane_width_right: float = 0.0       # m, frogpilotPlan.laneWidthRight
+  blindspot_available: bool = False   # the car reports blind spot monitoring (CarParams.enableBsm)
+  blindspot_left: bool = False
+  blindspot_right: bool = False
+  radar_left_alongside: bool = False  # radar target in the left lane within RADAR_ALONGSIDE_DISTANCE
+  radar_right_alongside: bool = False
 
 
 @dataclass
@@ -179,6 +202,12 @@ class Advisory:
   route_changed: bool = False
   route_change_count: int = 0
   navigation_age: float = -1.0
+  lane_info_available: bool = False
+  blindspot_available: bool = False
+  adjacent_lane_left: bool = False
+  adjacent_lane_right: bool = False
+  mapbox_lane_count: int = 0
+  mapbox_active_lanes: int = 0
 
 
 def classify(maneuver_type: str, modifier: str) -> tuple[str, str]:
@@ -288,6 +317,9 @@ class NavigationAssistEngine:
     self.state_since = 0.0
     self.band = 0  # 0 = far, 1 = approaching, 2 = imminent
 
+    # debounced camera lane estimate: side -> (current bool, candidate bool, candidate since)
+    self.lane_seen = {"left": [None, None, 0.0], "right": [None, None, 0.0]}
+
   # ---- helpers ----------------------------------------------------------
 
   def _set_state(self, state: str, now: float, urgent: bool = False) -> str:
@@ -373,6 +405,75 @@ class NavigationAssistEngine:
       return 1
     return 0
 
+  def _debounced_lane(self, side: str, exists: bool, now: float) -> bool | None:
+    """Only report a change in 'is there a lane on this side' after it held for LANE_STATE_HOLD."""
+    current, candidate, since = self.lane_seen[side]
+    if current is None:
+      self.lane_seen[side] = [exists, exists, now]
+      return exists
+    if exists == current:
+      self.lane_seen[side][1] = exists
+      return current
+    if candidate != exists:
+      self.lane_seen[side] = [current, exists, now]
+      return current
+    if now - since >= LANE_STATE_HOLD:
+      self.lane_seen[side] = [exists, exists, now]
+      return exists
+    return current
+
+  @staticmethod
+  def _mapbox_lane_text(nav: NavSnapshot, side: str) -> str:
+    lanes = nav.lanes_active
+    active = [i for i, a in enumerate(lanes) if a]
+    if not lanes or not active or len(active) == len(lanes):
+      return ""
+    n = len(active)
+    if side == "right" and active == list(range(len(lanes) - n, len(lanes))):
+      return f"right {n} lanes" if n > 1 else "right lane"
+    if side == "left" and active == list(range(n)):
+      return f"left {n} lanes" if n > 1 else "left lane"
+    return f"{n} of {len(lanes)} lanes"
+
+  def _lane_advice(self, inputs: EngineInputs, nav: NavSnapshot, kind: str, direction: str, out: Advisory,
+                   detail: str) -> tuple[str, int, str, str] | None:
+    """Milestone 2: return (state, urgency, headline, detail) or None for no lane advice."""
+    side = "left" if direction in LEFT_DIRECTIONS else "right" if direction in RIGHT_DIRECTIONS else None
+    if side is None or kind not in LANE_ADVICE_KINDS:
+      return None
+
+    word = side.upper()
+    lanes_text = self._mapbox_lane_text(nav, side)
+    base = detail or ""
+
+    def join(*parts):
+      return " · ".join(p for p in parts if p)
+
+    if not inputs.lane_info_valid:
+      # Only worth saying when lane data would normally exist; at city speeds FrogPilot doesn't estimate lanes.
+      return None, None, None, join(base, "lane position unknown") if inputs.lane_info_expected else base
+
+    width = inputs.lane_width_left if side == "left" else inputs.lane_width_right
+    lane_on_side = self._debounced_lane(side, width >= MIN_ADJACENT_LANE_WIDTH, inputs.now)
+    out.adjacent_lane_left = bool(self.lane_seen["left"][0]) if self.lane_seen["left"][0] is not None else inputs.lane_width_left >= MIN_ADJACENT_LANE_WIDTH
+    out.adjacent_lane_right = bool(self.lane_seen["right"][0]) if self.lane_seen["right"][0] is not None else inputs.lane_width_right >= MIN_ADJACENT_LANE_WIDTH
+
+    if not lane_on_side:
+      positioned = "IN EXIT LANE" if kind == KIND_EXIT else f"IN {word} LANE"
+      if lanes_text and "lanes" in lanes_text and not lanes_text.startswith(side):
+        positioned = f"IN {word} LANE"
+      return ALREADY_POSITIONED, URGENCY_APPROACHING, positioned, join(base, "stay in lane")
+
+    blindspot = inputs.blindspot_left if side == "left" else inputs.blindspot_right
+    radar = inputs.radar_left_alongside if side == "left" else inputs.radar_right_alongside
+    if blindspot or radar:
+      return TRAFFIC_DETECTED, URGENCY_TRAFFIC, f"VEHICLE ON {word}", join("wait", base)
+
+    mirrors = "check mirrors" if inputs.blindspot_available else "no blind spot data, check mirrors"
+    headline = f"MOVE {word}"
+    return (PREPARE_LEFT if side == "left" else PREPARE_RIGHT), \
+      (URGENCY_IMMINENT if self.band >= 2 else URGENCY_APPROACHING), headline, join(lanes_text and f"use {lanes_text}", base, mirrors)
+
   # ---- main entry -------------------------------------------------------
 
   def update(self, inputs: EngineInputs) -> Advisory:
@@ -430,6 +531,11 @@ class NavigationAssistEngine:
       return out
 
     maneuver, kind, direction, is_current = picked
+    out.lane_info_available = inputs.lane_info_valid
+    out.blindspot_available = inputs.blindspot_available
+    if is_current:
+      out.mapbox_lane_count = len(nav.lanes_active)
+      out.mapbox_active_lanes = sum(nav.lanes_active)
 
     # Dead-reckon between 1 Hz navd updates so the distance counts down smoothly.
     since = max(0.0, now - inputs.nav_received_at) if inputs.nav_received_at is not None else 0.0
@@ -477,11 +583,33 @@ class NavigationAssistEngine:
     else:
       state, urgency = NAVIGATION_ACTIVE, URGENCY_INFO
 
+    out.display_visible = True
+
+    # Milestone 2: lane advice once the maneuver is approaching
+    if self.band >= 1:
+      advice = self._lane_advice(inputs, nav, kind, direction, out, out.detail)
+      if advice is not None:
+        lane_state, lane_urgency, lane_headline, lane_detail = advice
+        out.detail = lane_detail
+        if lane_state is not None:
+          # Traffic warnings appear at once; everything else among lane states also switches at once
+          # (the lane estimate is already debounced), except leaving a traffic warning, which waits.
+          urgent = not (self.state == TRAFFIC_DETECTED and lane_state != TRAFFIC_DETECTED)
+          out.state = self._set_state(lane_state, now, urgent=urgent)
+          if out.state == lane_state:
+            out.urgency = lane_urgency
+            out.headline = lane_headline
+            return out
+          if out.state in (PREPARE_LEFT, PREPARE_RIGHT, ALREADY_POSITIONED, TRAFFIC_DETECTED):
+            # still holding the previous lane state during its dwell time
+            out.urgency = URGENCY_TRAFFIC if out.state == TRAFFIC_DETECTED else URGENCY_APPROACHING
+            out.headline = f"VEHICLE ON {side_word(direction)}" if out.state == TRAFFIC_DETECTED else lane_headline
+            return out
+
     # Moving toward more urgency is immediate; relaxing waits for the dwell time.
-    urgent = {NAVIGATION_ACTIVE: 0, MANEUVER_APPROACHING: 1, MANEUVER_IMMINENT: 2}.get(state, 0) > \
-             {NAVIGATION_ACTIVE: 0, MANEUVER_APPROACHING: 1, MANEUVER_IMMINENT: 2}.get(self.state, -1)
+    rank = {NAVIGATION_ACTIVE: 0, MANEUVER_APPROACHING: 1, MANEUVER_IMMINENT: 2}
+    urgent = rank.get(state, 0) > rank.get(self.state, -1) or self.state not in rank
     out.state = self._set_state(state, now, urgent=urgent)
     out.urgency = {NAVIGATION_ACTIVE: URGENCY_INFO, MANEUVER_APPROACHING: URGENCY_APPROACHING,
                    MANEUVER_IMMINENT: URGENCY_IMMINENT}.get(out.state, urgency)
-    out.display_visible = True
     return out

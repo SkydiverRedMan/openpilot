@@ -89,6 +89,13 @@ Then on the comma: **Settings → Software → Check / Update**, and reboot when
 Before publishing, the dry run proves the exact commit is retrievable and builds on the current `na2`; after the push
 the script confirms GitHub's `na2` points at it, which is exactly what `updated` fetches.
 
+## Switching branches on the comma
+
+Settings → Software → **Target Branch** lists every branch in the repo, and Update installs the selected one. Only
+select **prebuilt** branches: `na2` (current), `na2bk` (2026-11-16 backup), or a future experimental `na2x` built the
+same way with `RELEASE_BRANCH=na2x`. Never select `na2-src`, `bsm-highlander-source` or `my-frogpilot-source`: they
+are source branches and the comma would try to compile on boot.
+
 ## Recovery
 
 * **Updated but something is wrong, comma still boots:** `tools/na2/rollback.sh` pushes a new commit whose files equal
