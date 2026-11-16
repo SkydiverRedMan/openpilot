@@ -589,6 +589,7 @@ void AnnotatedCameraWidget::paintGL() {
   if (s->scene.world_objects_visible) {
     frogpilot_nvg->paintFrogPilotWidgets(painter);
   }
+  frogpilot_nvg->paintNavigationAssistBanner(painter);
 
   double cur_draw_t = millis_since_boot();
   double dt = cur_draw_t - prev_draw_t;

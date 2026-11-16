@@ -91,8 +91,13 @@ def test_ui_reads_message_and_toggle():
   ui = read("frogpilot/ui/frogpilot_ui.cc")
   assert '"navigationAssist"' in ui
   camera = read("frogpilot/ui/qt/onroad/frogpilot_annotated_camera.cc")
-  assert 'frogpilot_toggles.value(QLatin1String("navigation_assist"))' in camera
   assert 'fpsm.alive("navigationAssist")' in camera
+  assert "navigationAssist.getEnabled()" in camera
+  # drawn outside the world-objects gate so it shows before the road model is ready
+  base = read("selfdrive/ui/qt/onroad/annotated_camera.cc")
+  gate = base.index("if (s->scene.world_objects_visible) {")
+  call = base.index("frogpilot_nvg->paintNavigationAssistBanner(painter);")
+  assert call > base.index("}", gate)
   settings = read("frogpilot/ui/qt/offroad/navigation_settings.cc")
   assert 'new ParamControl("NavigationAssist"' in settings
 

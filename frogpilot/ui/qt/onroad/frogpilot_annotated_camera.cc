@@ -307,10 +307,10 @@ void FrogPilotAnnotatedCameraWidget::updateState(const UIState &s, const FrogPil
 
   screenRecorderButton->setVisible(!frogpilot_scene.map_open && !standstillTimerRect.intersects(screenRecorderButton->geometry()) && !staticSignalRect.intersects(screenRecorderButton->geometry()) && frogpilot_toggles.value(QLatin1String("screen_recorder")).toBool());
 
-  // Navigation Assist (advisory banner). Hidden unless the switch is on, the
-  // message is fresh, and navigation_assistd says there is something to show.
+  // Navigation Assist (advisory banner). Hidden unless the message is fresh and
+  // navigation_assistd (which re-reads the switch every 0.5 s) says to show it.
   navAssistVisible = false;
-  if (frogpilot_toggles.value(QLatin1String("navigation_assist")).toBool() && fpsm.alive("navigationAssist")) {
+  if (fpsm.alive("navigationAssist")) {
     const cereal::NavigationAssist::Reader &navigationAssist = fpsm["navigationAssist"].getNavigationAssist();
     navAssistVisible = navigationAssist.getEnabled() && navigationAssist.getDisplayVisible() && navigationAssist.getUrgency() > 0;
     navAssistDirection = static_cast<int>(navigationAssist.getDirection());
@@ -420,10 +420,6 @@ void FrogPilotAnnotatedCameraWidget::paintFrogPilotWidgets(QPainter &p) {
 
   if (!staticSignalRect.isNull()) {
     paintTurnSignals(p);
-  }
-
-  if (navAssistVisible && !bigMapOpen) {
-    paintNavigationAssist(p);
   }
 
   if (showBottomIcons && !frogpilot_scene.map_open) {
@@ -767,6 +763,13 @@ void FrogPilotAnnotatedCameraWidget::paintPathEdges(QPainter &p) {
   p.drawPath(path);
 
   p.restore();
+}
+
+void FrogPilotAnnotatedCameraWidget::paintNavigationAssistBanner(QPainter &p) {
+  // Navigation information, not a world object, so it is drawn whether or not the road model is ready
+  if (navAssistVisible && !bigMapOpen && !driverView) {
+    paintNavigationAssist(p);
+  }
 }
 
 void FrogPilotAnnotatedCameraWidget::paintNavigationAssist(QPainter &p) {
