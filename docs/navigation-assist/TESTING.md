@@ -72,3 +72,6 @@ the map, that it hides in tunnels or when navigation stops, and that disabling i
 | Date | What | Result |
 |---|---|---|
 | 2026-11-16 | Unit/integration tests (python:3.11 + pycapnp 2.0.0) | 90 passed, 1 skipped |
+| 2026-11-16 | Full PC build of na2-src in `Dockerfile.openpilot_base` image (`scons -k`) | UI, params_pyx, cereal and all other targets compiled; only the two tinygrad model `.pkl` targets failed (need LLVM on PC; built differently on the comma) |
+| 2026-11-16 | All Navigation Assist tests + `frogpilot/tests/test_process_config.py` in that build | 95 passed |
+| 2026-11-16 | Offscreen UI render of the banner (Xvfb) | **Not completed**: render script hung before the first screenshot; UI process stayed up. Retry, or check on the comma with synthetic mode |
