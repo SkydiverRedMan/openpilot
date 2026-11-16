@@ -18,8 +18,10 @@ FrogPilot settings → **Navigation** → **Navigation Assist**. Default **off**
    (every 0.5 s) the `NavigationAssist`, `NavDestination`, `IsMetric` params.
 2. It converts `navInstruction` into a `NavSnapshot` and calls `NavigationAssistEngine.update()`.
 3. It publishes the resulting `Advisory` as `navigationAssist`.
-4. The UI draws the banner when `enabled && displayVisible && urgency > 0`, the toggle is on, and the message is alive
-   (received within ~2 s).
+4. The UI draws the banner when `enabled && displayVisible && urgency > 0` and the message is alive (received within
+   ~2 s). It does not wait for the road model, calibration or plan (it is navigation information, not a world object),
+   and it does not use the UI's copy of the FrogPilot toggles, which only refreshes while `frogpilotPlan` is published.
+   The switch still takes effect within 0.5 s because `navigation_assistd` re-reads it and publishes `enabled`.
 
 ## Engine (`engine.py`)
 
