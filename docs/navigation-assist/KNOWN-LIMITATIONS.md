@@ -2,8 +2,12 @@
 
 ## Milestone 1 scope
 
-* Shows the next maneuver, side and distance only. It does **not** say which lane to be in, whether you are already in
-  the right lane, or anything about traffic. Those are Milestone 2.
+* Milestone 2 lane advice only knows whether the camera sees *a* lane beside the car, not how many lanes there are or
+  which exact lane the exit uses. "IN EXIT LANE" means "no lane to your right", which is usually but not always the
+  exit lane (two-lane exits, lane drops). Mapbox lane guidance helps only where Mapbox has it.
+* Traffic warnings depend on the Highlander's blind spot signals reaching openpilot. As of 2026-11-16 that is being
+  checked against stored drive logs; if the signals never arrive, only the front radar's adjacent-lane targets can
+  trigger a warning, and the banner always says to check mirrors.
 * No sound. An optional sound (off by default) is planned for Milestone 3.
 * Thresholds (3.2 km / 100 s approaching, 400 m / 15 s imminent) are first guesses. They need tuning from real drives
   at 85-90 mph.

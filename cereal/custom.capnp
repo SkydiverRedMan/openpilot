@@ -350,7 +350,7 @@ struct NavigationAssist @0x9ee1e6b43b301f89 {
   timeToManeuver @5 :Float32;       # s at the current speed
   confidence @6 :Float32;           # 0..1; maneuver is shown only when high enough
   displayVisible @7 :Bool;          # UI should draw the banner
-  urgency @8 :UInt8;                # 0 hidden, 1 info, 2 approaching, 3 imminent, 4 data warning
+  urgency @8 :UInt8;                # 0 hidden, 1 info, 2 approaching, 3 imminent, 4 data warning, 5 traffic
   headline @9 :Text;                # e.g. "EXIT RIGHT"
   distanceText @10 :Text;           # e.g. "1.8 MI", already in the driver's units
   detail @11 :Text;                 # e.g. "Exit 45: NY-12 North"
@@ -358,6 +358,13 @@ struct NavigationAssist @0x9ee1e6b43b301f89 {
   routeChangeCount @13 :UInt32;
   navigationAge @14 :Float32;       # s since the last navInstruction, -1 if never
   synthetic @15 :Bool;              # data comes from a bench test scenario
+  # Milestone 2: lane recommendations
+  laneInfoAvailable @16 :Bool;      # camera lane estimate was usable
+  blindspotAvailable @17 :Bool;     # the car reports blind spot monitoring
+  adjacentLaneLeft @18 :Bool;       # camera sees a lane to the left
+  adjacentLaneRight @19 :Bool;      # camera sees a lane to the right
+  mapboxLaneCount @20 :UInt8;       # lanes in Mapbox's lane guidance for this maneuver (0 = none)
+  mapboxActiveLanes @21 :UInt8;     # of those, lanes usable for the maneuver
 
   enum State @0xb5717a8b6d7ce21e {
     disabled @0;
@@ -368,7 +375,7 @@ struct NavigationAssist @0x9ee1e6b43b301f89 {
     maneuverImminent @5;
     routeUnavailable @6;
     insufficientInformation @7;
-    # Milestone 2 (not produced yet)
+    # Milestone 2 lane advice
     prepareLeft @8;
     prepareRight @9;
     alreadyPositioned @10;

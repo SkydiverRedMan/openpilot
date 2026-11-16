@@ -316,6 +316,7 @@ void FrogPilotAnnotatedCameraWidget::updateState(const UIState &s, const FrogPil
     navAssistDirection = static_cast<int>(navigationAssist.getDirection());
     navAssistKind = static_cast<int>(navigationAssist.getManeuverKind());
     navAssistUrgency = navigationAssist.getUrgency();
+    navAssistState = static_cast<int>(navigationAssist.getState());
     navAssistSynthetic = navigationAssist.getSynthetic();
     navAssistHeadline = QString::fromStdString(navigationAssist.getHeadline());
     navAssistDistance = QString::fromStdString(navigationAssist.getDistanceText());
@@ -778,12 +779,13 @@ void FrogPilotAnnotatedCameraWidget::paintNavigationAssist(QPainter &p) {
   static const QFont detailFont = InterFont(32, QFont::DemiBold);
   static const QFont tagFont = InterFont(26, QFont::Bold);
 
-  // Urgency colours: 1 info, 2 approaching, 3 imminent, 4 data warning
+  // Urgency colours: 1 info, 2 approaching, 3 imminent, 4 data warning, 5 vehicle detected on the needed side
   QColor accent;
   switch (navAssistUrgency) {
     case 2: accent = QColor(23, 134, 68); break;
     case 3: accent = QColor(218, 111, 37); break;
     case 4: accent = QColor(150, 150, 150); break;
+    case 5: accent = redColor(); break;
     default: accent = QColor(255, 255, 255, 140); break;
   }
 
@@ -821,7 +823,7 @@ void FrogPilotAnnotatedCameraWidget::paintNavigationAssist(QPainter &p) {
   QRect headlineRow(textLeft, banner.top() + 15, textRight - textLeft, 90);
   if (distanceWidth > 0) {
     p.setFont(distanceFont);
-    p.setPen(navAssistUrgency == 2 || navAssistUrgency == 3 ? accent.lighter(130) : whiteColor());
+    p.setPen(navAssistUrgency >= 2 && navAssistUrgency != 4 ? accent.lighter(130) : whiteColor());
     p.drawText(headlineRow, Qt::AlignVCenter | Qt::AlignRight, navAssistDistance);
   }
 
@@ -858,6 +860,7 @@ void FrogPilotAnnotatedCameraWidget::paintNavigationAssistIcon(QPainter &p, cons
   // Direction (cereal NavigationAssist.Direction):
   //   0 none, 1 left, 2 right, 3 straight, 4 slightLeft, 5 slightRight, 6 sharpLeft, 7 sharpRight, 8 uturn
   // ManeuverKind: 8 arrive, 9 uturn
+  // State: 8 prepareLeft, 9 prepareRight, 10 alreadyPositioned, 11 trafficDetected
   p.save();
   p.translate(rect.center());
   p.setPen(QPen(color, 12, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
@@ -869,6 +872,29 @@ void FrogPilotAnnotatedCameraWidget::paintNavigationAssistIcon(QPainter &p, cons
     p.drawEllipse(QPointF(0, 0), 38, 38);
     p.drawLine(QPointF(0, -20), QPointF(0, 6));
     p.drawPoint(QPointF(0, 20));
+  } else if (navAssistState == 8 || navAssistState == 9) {
+    // Move over: two lane lines with an arrow crossing toward the needed side
+    float sideSign = navAssistState == 9 ? 1.0f : -1.0f;
+    p.setPen(QPen(color, 6, Qt::DashLine, Qt::RoundCap));
+    p.drawLine(QPointF(0, -40), QPointF(0, 40));
+    p.setPen(QPen(color, 12, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    QPainterPath shift;
+    shift.moveTo(-24 * sideSign, 38);
+    shift.cubicTo(-24 * sideSign, 0, 24 * sideSign, 10, 24 * sideSign, -26);
+    p.drawPath(shift);
+    p.drawLine(QPointF(24 * sideSign, -36), QPointF(10 * sideSign, -18));
+    p.drawLine(QPointF(24 * sideSign, -36), QPointF(38 * sideSign, -18));
+  } else if (navAssistState == 10) {
+    // Already positioned: check mark
+    p.drawLine(QPointF(-30, 2), QPointF(-8, 26));
+    p.drawLine(QPointF(-8, 26), QPointF(32, -24));
+  } else if (navAssistState == 11) {
+    // Vehicle detected: warning triangle
+    p.setPen(QPen(color, 8, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    QPolygonF triangle({QPointF(0, -38), QPointF(40, 34), QPointF(-40, 34)});
+    p.drawPolygon(triangle);
+    p.drawLine(QPointF(0, -12), QPointF(0, 10));
+    p.drawPoint(QPointF(0, 22));
   } else if (navAssistDirection == 8 || navAssistKind == 9) {
     QPainterPath uturn;
     uturn.moveTo(18, 36);

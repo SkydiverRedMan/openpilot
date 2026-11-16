@@ -28,6 +28,7 @@ class Driver:
     self.nav = None
     self.nav_at = None
     self.position_valid = True
+    self.lane = {}
 
   def step(self, new_nav=None, v=0.0, dt=0.2):
     self.t += dt
@@ -36,7 +37,7 @@ class Driver:
       self.nav, self.nav_at, updated = new_nav, self.t, True
     return self.engine.update(EngineInputs(now=self.t, enabled=self.enabled, destination_set=self.destination, v_ego=v,
                                            nav=self.nav, nav_received_at=self.nav_at, nav_updated=updated,
-                                           position_valid=self.position_valid, is_metric=self.metric))
+                                           position_valid=self.position_valid, is_metric=self.metric, **self.lane))
 
   def run(self, seconds, distance_fn, v, **kw):
     """Drive for `seconds`, publishing nav every second; distance_fn(t) gives the maneuver distance."""
@@ -348,9 +349,168 @@ def test_confidence_recovery_needs_margin():
   assert out.state != E.INSUFFICIENT_INFORMATION and out.confidence >= E.CONFIDENCE_THRESHOLD + 0.1
 
 
-def test_milestone_two_states_are_never_emitted():
+# ---- Milestone 2: lane recommendations -------------------------------------------
+
+LANES_BOTH = dict(lane_info_valid=True, lane_width_left=3.6, lane_width_right=3.6, blindspot_available=True)
+RIGHTMOST = dict(lane_info_valid=True, lane_width_left=3.6, lane_width_right=0.0, blindspot_available=True)
+LEFTMOST = dict(lane_info_valid=True, lane_width_left=0.0, lane_width_right=3.6, blindspot_available=True)
+
+
+def approach(d, distance=2500, v=30, seconds=2, **kw):
+  return d.run(seconds, lambda t: distance, v=v, **kw)
+
+
+def test_no_lane_advice_when_far():
   d = Driver()
-  seen = set()
-  for i in range(600):
-    seen.add(d.step(nav(max(0.0, 6000 - 35 * i * 0.2)) if i % 5 == 0 else None, v=35).state)
-  assert not seen & {E.PREPARE_LEFT, E.PREPARE_RIGHT, E.ALREADY_POSITIONED, E.TRAFFIC_DETECTED}
+  d.lane = dict(LANES_BOTH)
+  out = approach(d, distance=9000, v=20)  # 450 s away
+  assert out.state == E.NAVIGATION_ACTIVE and out.headline == "EXIT RIGHT"
+
+
+def test_move_right_when_lane_to_the_right():
+  d = Driver()
+  d.lane = dict(LANES_BOTH)
+  out = approach(d)
+  assert out.state == E.PREPARE_RIGHT and out.headline == "MOVE RIGHT"
+  assert out.distance_text.endswith(" MI") and "check mirrors" in out.detail and "Exit 45" in out.detail
+  assert out.urgency == E.URGENCY_APPROACHING and out.adjacent_lane_right
+
+
+def test_move_left_for_left_exit_and_fork():
+  d = Driver()
+  d.lane = dict(LANES_BOTH)
+  out = approach(d, mtype="off ramp", modifier="slight left")
+  assert out.state == E.PREPARE_LEFT and out.headline == "MOVE LEFT"
+  d2 = Driver()
+  d2.lane = dict(LANES_BOTH)
+  out = approach(d2, mtype="fork", modifier="slight left")
+  assert out.state == E.PREPARE_LEFT
+
+
+def test_already_positioned_in_rightmost_lane():
+  d = Driver()
+  d.lane = dict(RIGHTMOST)
+  out = approach(d)
+  assert out.state == E.ALREADY_POSITIONED and out.headline == "IN EXIT LANE"
+  assert "stay in lane" in out.detail and out.urgency == E.URGENCY_APPROACHING
+
+
+def test_positioned_for_right_turn_says_right_lane():
+  d = Driver()
+  d.lane = dict(RIGHTMOST)
+  out = approach(d, mtype="turn", modifier="right")
+  assert out.state == E.ALREADY_POSITIONED and out.headline == "IN RIGHT LANE"
+
+
+def test_wrong_side_lane_does_not_count_as_positioned():
+  d = Driver()
+  d.lane = dict(LEFTMOST)  # leftmost lane but the exit is on the right
+  out = approach(d)
+  assert out.state == E.PREPARE_RIGHT
+
+
+def test_blindspot_on_needed_side_warns():
+  d = Driver()
+  d.lane = dict(LANES_BOTH, blindspot_right=True)
+  out = approach(d)
+  assert out.state == E.TRAFFIC_DETECTED and out.headline == "VEHICLE ON RIGHT"
+  assert out.urgency == E.URGENCY_TRAFFIC and out.detail.startswith("wait")
+
+
+def test_blindspot_on_other_side_is_ignored():
+  d = Driver()
+  d.lane = dict(LANES_BOTH, blindspot_left=True)
+  assert approach(d).state == E.PREPARE_RIGHT
+
+
+def test_radar_vehicle_alongside_warns():
+  d = Driver()
+  d.lane = dict(LANES_BOTH, radar_right_alongside=True)
+  assert approach(d).state == E.TRAFFIC_DETECTED
+
+
+def test_traffic_warning_is_immediate_and_clears_after_dwell():
+  d = Driver()
+  d.lane = dict(LANES_BOTH)
+  assert approach(d).state == E.PREPARE_RIGHT
+  d.lane["blindspot_right"] = True
+  assert d.step(nav(2500), v=30).state == E.TRAFFIC_DETECTED
+  d.lane["blindspot_right"] = False
+  out = d.step(nav(2500), v=30)
+  assert out.state == E.TRAFFIC_DETECTED  # holds briefly so it doesn't flicker
+  for _ in range(int(E.MIN_STATE_DWELL / 0.2) + 1):
+    out = d.step(nav(2500), v=30)
+  assert out.state == E.PREPARE_RIGHT
+
+
+def test_never_says_clear():
+  """Whatever the inputs, lane advice never claims a lane is safe or clear."""
+  for lane in (LANES_BOTH, RIGHTMOST, dict(LANES_BOTH, blindspot_available=False), dict(LANES_BOTH, blindspot_right=True)):
+    d = Driver()
+    d.lane = dict(lane)
+    out = approach(d)
+    text = (out.headline + " " + out.detail).lower()
+    assert "clear" not in text and "safe" not in text
+
+
+def test_no_blindspot_data_is_called_out():
+  d = Driver()
+  d.lane = dict(LANES_BOTH, blindspot_available=False)
+  out = approach(d)
+  assert out.state == E.PREPARE_RIGHT and "no blind spot data" in out.detail
+
+
+def test_lane_info_unavailable_keeps_maneuver_and_says_so():
+  d = Driver()
+  d.lane = dict(lane_info_valid=False, lane_info_expected=True)
+  out = approach(d)
+  assert out.state == E.MANEUVER_APPROACHING and out.headline == "EXIT RIGHT"
+  assert "lane position unknown" in out.detail and not out.lane_info_available
+
+
+def test_no_lane_note_at_city_speed():
+  d = Driver()
+  d.lane = dict(lane_info_valid=False, lane_info_expected=False)
+  out = approach(d, mtype="turn", modifier="right", v=10)
+  assert out.detail == "Exit 45" and "unknown" not in out.detail
+
+
+def test_lane_estimate_is_debounced():
+  d = Driver()
+  d.lane = dict(LANES_BOTH)
+  assert approach(d).state == E.PREPARE_RIGHT
+  d.lane["lane_width_right"] = 0.0   # one noisy frame says no lane to the right
+  assert d.step(nav(2500), v=30).state == E.PREPARE_RIGHT
+  d.lane["lane_width_right"] = 3.6
+  assert d.step(nav(2500), v=30).state == E.PREPARE_RIGHT
+  d.lane["lane_width_right"] = 0.0   # now it stays gone: driver moved over
+  out = None
+  for _ in range(int(E.LANE_STATE_HOLD / 0.2) + 2):
+    out = d.step(nav(2500), v=30)
+  assert out.state == E.ALREADY_POSITIONED
+
+
+def test_imminent_move_is_orange():
+  d = Driver()
+  d.lane = dict(LANES_BOTH)
+  out = approach(d, distance=300)
+  assert out.state == E.PREPARE_RIGHT and out.urgency == E.URGENCY_IMMINENT
+
+
+def test_mapbox_lane_guidance_in_detail():
+  d = Driver()
+  d.lane = dict(LANES_BOTH)
+  out = d.run(2, lambda t: 2500, v=30)
+  d.step(NavSnapshot(valid=True, maneuver_distance=2500, maneuver_type="off ramp", maneuver_modifier="slight right",
+                     primary_text="Exit 45", distance_remaining=3500,
+                     all_maneuvers=[Maneuver(2500, "off ramp", "slight right"), Maneuver(3500, "arrive", "right")],
+                     lanes_active=[False, False, True, True]), v=30)
+  out = d.step(v=30)
+  assert "use right 2 lanes" in out.detail and out.mapbox_lane_count == 4 and out.mapbox_active_lanes == 2
+
+
+def test_no_lane_advice_for_arrival_or_continue():
+  d = Driver()
+  d.lane = dict(LANES_BOTH)
+  out = approach(d, mtype="arrive", modifier="right")
+  assert out.state == E.MANEUVER_APPROACHING and out.headline == "ARRIVE RIGHT"

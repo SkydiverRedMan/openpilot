@@ -18,7 +18,7 @@ def play(name, seconds, dt=0.2):
       if snapshot is not None:
         nav, nav_at, updated = snapshot, t0 + t, True
     out = engine.update(EngineInputs(now=t0 + t, enabled=True, destination_set=True, v_ego=scenario.speed,
-                                     nav=nav, nav_received_at=nav_at, nav_updated=updated))
+                                     nav=nav, nav_received_at=nav_at, nav_updated=updated, **scenario.lane_context(t)))
     results.append((t, out))
   return results
 
@@ -32,9 +32,10 @@ def states_in_order(results):
 
 
 def test_highway_exit_right_full_approach():
+  """Middle lane at 88 mph: info, then MOVE RIGHT, a car alongside, MOVE RIGHT again, moved over, exit."""
   results = play("highway_exit_right", 130)
   order = states_in_order(results)
-  assert order[:3] == [E.NAVIGATION_ACTIVE, E.MANEUVER_APPROACHING, E.MANEUVER_IMMINENT]
+  assert order[:5] == [E.NAVIGATION_ACTIVE, E.PREPARE_RIGHT, E.TRAFFIC_DETECTED, E.PREPARE_RIGHT, E.ALREADY_POSITIONED]
   first = results[2][1]
   assert first.headline == "EXIT RIGHT" and first.detail == "Exit 45: NY-12 North" and first.distance_text.endswith("MI")
   # distance strictly decreases while approaching the exit
@@ -44,18 +45,31 @@ def test_highway_exit_right_full_approach():
 
 def test_after_exit_next_maneuver_is_turn():
   results = play("highway_exit_right", 140)
-  assert results[-1][1].headline == "TURN RIGHT"
+  out = results[-1][1]
+  assert out.kind == E.KIND_TURN and out.direction == E.DIR_RIGHT
+  assert out.headline == "IN RIGHT LANE"  # the scenario's driver already moved to the right lane
 
 
 def test_highway_exit_left():
   results = play("highway_exit_left", 5)
   assert results[-1][1].headline == "EXIT LEFT"
   assert results[-1][1].direction == E.DIR_SLIGHT_LEFT
+  # already in the left lane once the exit is close
+  results = play("highway_exit_left", 60)
+  assert results[-1][1].state == E.ALREADY_POSITIONED
+
+
+def test_exit_without_lane_data_says_so():
+  results = play("exit_right_no_lane_data", 60)
+  out = results[-1][1]
+  assert out.state in (E.MANEUVER_APPROACHING, E.MANEUVER_IMMINENT) and "lane position unknown" in out.detail
 
 
 def test_highway_fork():
   results = play("highway_fork_left", 5)
-  assert results[-1][1].headline == "KEEP LEFT" and results[-1][1].kind == E.KIND_FORK
+  assert results[0][1].headline == "KEEP LEFT" and results[0][1].kind == E.KIND_FORK  # far out: maneuver only
+  results = play("highway_fork_left", 60)
+  assert E.PREPARE_LEFT in states_in_order(results) and results[-1][1].state == E.ALREADY_POSITIONED
 
 
 def test_city_turns_become_imminent_quickly():

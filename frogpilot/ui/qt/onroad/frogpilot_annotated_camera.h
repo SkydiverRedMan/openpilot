@@ -109,6 +109,7 @@ private:
   int desiredFollowDistance = 0;
   int navAssistDirection = 0;
   int navAssistKind = 0;
+  int navAssistState = 0;
   int navAssistUrgency = 0;
   int signalAnimationLength = 0;
   int signalHeight = 0;

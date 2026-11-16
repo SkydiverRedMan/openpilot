@@ -37,22 +37,33 @@ class FakeParams:
     self.values.pop(key, None)
 
 
+def car_state(v=0.0, left=False, right=False):
+  return SimpleNamespace(vEgo=v, leftBlindspot=left, rightBlindspot=right)
+
+
+def lead(status=False, d_rel=0.0):
+  return SimpleNamespace(status=status, dRel=d_rel)
+
+
 def nav_msg(distance, mtype="off ramp", modifier="slight right", text="Exit 45", remaining=None):
   maneuvers = [SimpleNamespace(distance=distance, type=mtype, modifier=modifier),
                SimpleNamespace(distance=distance + 1000, type="arrive", modifier="right")]
   return SimpleNamespace(maneuverDistance=distance, maneuverType=mtype, maneuverModifier=modifier,
                          maneuverPrimaryText=text, maneuverSecondaryText="", distanceRemaining=remaining or distance + 1000,
-                         allManeuvers=maneuvers, lanes=[])
+                         allManeuvers=maneuvers, lanes=[SimpleNamespace(active=a) for a in (False, True)])
 
 
 class FakeSubMaster:
-  SERVICES = ("navInstruction", "frogpilotNavigation", "carState")
+  SERVICES = tuple(D.SERVICES)
 
   def __init__(self):
-    self.data = {"carState": SimpleNamespace(vEgo=0.0), "navInstruction": None, "frogpilotNavigation": SimpleNamespace()}
+    self.data = {"carState": car_state(), "navInstruction": None, "frogpilotNavigation": SimpleNamespace(),
+                 "modelV2": SimpleNamespace(laneLineProbs=[0.0] * 4), "frogpilotPlan": SimpleNamespace(laneWidthLeft=0.0, laneWidthRight=0.0),
+                 "frogpilotRadarState": SimpleNamespace(leadLeft=lead(), leadRight=lead())}
     self.updated = dict.fromkeys(self.SERVICES, False)
     self.seen = dict.fromkeys(self.SERVICES, False)
     self.valid = dict.fromkeys(self.SERVICES, True)
+    self.alive = dict.fromkeys(self.SERVICES, True)
     self.pending = {}
 
   def publish(self, service, msg, valid=True):
@@ -116,7 +127,7 @@ def test_field_map_covers_every_advisory_attribute():
 
 def test_shows_next_maneuver_from_nav_instruction():
   daemon, sm, pm, params, _, clock = make()
-  sm.data["carState"] = SimpleNamespace(vEgo=30.0)
+  sm.data["carState"] = car_state(30.0)
   sm.seen["carState"] = True
   sm.publish("navInstruction", nav_msg(2900))
   out = tick(daemon, clock)
@@ -164,7 +175,7 @@ def test_stale_when_navd_stops():
 @pytest.mark.parametrize("name", sorted(SCENARIOS))
 def test_synthetic_scenarios_run_when_parked(name):
   daemon, sm, pm, params, params_memory, clock = make(destination=False, synthetic=name)
-  sm.publish("carState", SimpleNamespace(vEgo=0.0))
+  sm.publish("carState", car_state(0.0))
   out = tick(daemon, clock)
   assert out["synthetic"] is True
   states = set()
@@ -186,7 +197,7 @@ def test_synthetic_stops_when_vehicle_moves():
   daemon, sm, pm, params, params_memory, clock = make(destination=False, synthetic="highway_exit_right")
   for _ in range(5):
     assert tick(daemon, clock)["synthetic"]
-  sm.publish("carState", SimpleNamespace(vEgo=3.0))
+  sm.publish("carState", car_state(3.0))
   out = tick(daemon, clock)
   assert out["synthetic"] is False
   assert "NavigationAssistSynthetic" not in params_memory.values
@@ -206,3 +217,66 @@ def test_daemon_restart_reads_persisted_switch():
     sm, pm, clock = FakeSubMaster(), FakePubMaster(), Clock()
     daemon = D.NavigationAssistDaemon(sm, pm, params, FakeParams(), clock=clock)
     assert tick(daemon, clock)["enabled"] is True
+
+
+# ---- Milestone 2 inputs -------------------------------------------------------
+
+def drive_with_lanes(sm, v=30.0, probs=(0.1, 0.9, 0.9, 0.1), left=3.6, right=3.6, bs_right=False, radar_right=None):
+  sm.publish("carState", car_state(v, right=bs_right))
+  sm.publish("modelV2", SimpleNamespace(laneLineProbs=list(probs)))
+  sm.publish("frogpilotPlan", SimpleNamespace(laneWidthLeft=left, laneWidthRight=right))
+  sm.publish("frogpilotRadarState", SimpleNamespace(leadLeft=lead(), leadRight=radar_right or lead()))
+
+
+def test_lane_inputs_produce_move_right():
+  daemon, sm, pm, params, params_memory, clock = make()
+  drive_with_lanes(sm)
+  sm.publish("navInstruction", nav_msg(2500))
+  out = tick(daemon, clock)
+  assert out["state"] == E.PREPARE_RIGHT and out["headline"] == "MOVE RIGHT"
+  assert out["laneInfoAvailable"] and out["adjacentLaneRight"]
+
+
+def test_low_lane_line_confidence_means_unknown():
+  daemon, sm, pm, params, params_memory, clock = make()
+  drive_with_lanes(sm, probs=(0.1, 0.3, 0.9, 0.1))
+  sm.publish("navInstruction", nav_msg(2500))
+  out = tick(daemon, clock)
+  assert out["state"] == E.MANEUVER_APPROACHING and not out["laneInfoAvailable"]
+
+
+def test_below_lane_change_speed_means_unknown():
+  daemon, sm, pm, params, params_memory, clock = make()
+  params_memory.put("FrogPilotToggles", '{"minimum_lane_change_speed": 13.4}')
+  daemon.last_car_params_poll = -1e9
+  drive_with_lanes(sm, v=10.0)
+  sm.publish("navInstruction", nav_msg(2500))
+  out = tick(daemon, clock)
+  assert not out["laneInfoAvailable"]
+
+
+def test_blindspot_from_car_state_warns():
+  daemon, sm, pm, params, params_memory, clock = make()
+  drive_with_lanes(sm, bs_right=True)
+  sm.publish("navInstruction", nav_msg(2500))
+  out = tick(daemon, clock)
+  assert out["state"] == E.TRAFFIC_DETECTED and out["headline"] == "VEHICLE ON RIGHT"
+
+
+def test_radar_alongside_warns_but_far_ahead_does_not():
+  daemon, sm, pm, params, params_memory, clock = make()
+  drive_with_lanes(sm, radar_right=lead(True, 60.0))
+  sm.publish("navInstruction", nav_msg(2500))
+  assert tick(daemon, clock)["state"] == E.PREPARE_RIGHT
+  daemon2, sm2, *_rest, clock2 = make()
+  drive_with_lanes(sm2, radar_right=lead(True, 8.0))
+  sm2.publish("navInstruction", nav_msg(2500))
+  assert tick(daemon2, clock2)["state"] == E.TRAFFIC_DETECTED
+
+
+def test_stale_model_means_unknown():
+  daemon, sm, pm, params, params_memory, clock = make()
+  drive_with_lanes(sm)
+  sm.alive["modelV2"] = False
+  sm.publish("navInstruction", nav_msg(2500))
+  assert not tick(daemon, clock)["laneInfoAvailable"]
