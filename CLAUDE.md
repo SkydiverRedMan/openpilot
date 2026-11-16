@@ -21,6 +21,8 @@ Personal FrogPilot fork for Keith's comma 3X in a Toyota Highlander. Never push 
 * Navigation Assist is advisory only: it must never publish anything controls, planners, models or lane-change code
   read, never steer/signal/change speed. See `docs/navigation-assist/`.
 * Install branches stay lean: tests and notes are kept out of `na2` by `release/prepare_release.py`.
+* The comma's Software → Target Branch list shows every branch. Only prebuilt branches are safe to select there
+  (`na2`, `na2bk`, a future experimental `na2x`); never a `*-src`/`*-source` branch, which would compile on the comma.
 
 ## Workflow
 
