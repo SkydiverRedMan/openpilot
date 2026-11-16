@@ -99,8 +99,11 @@ def test_ui_reads_message_and_toggle():
 
 def test_schema_builds_message():
   capnp = pytest.importorskip("capnp")
-  capnp.remove_import_hook()
-  log = capnp.load(str(ROOT / "cereal/log.capnp"), imports=[str(ROOT / "cereal")])
+  try:
+    from cereal import log  # full openpilot environment: schema already loaded
+  except ImportError:
+    capnp.remove_import_hook()
+    log = capnp.load(str(ROOT / "cereal/log.capnp"), imports=[str(ROOT / "cereal")])
 
   advisory = E.Advisory(enabled=True, state=E.MANEUVER_APPROACHING, kind=E.KIND_EXIT, direction=E.DIR_SLIGHT_RIGHT,
                         maneuver_distance=2896.8, time_to_maneuver=73.6, confidence=0.95, display_visible=True,
