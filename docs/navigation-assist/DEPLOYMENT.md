@@ -43,7 +43,7 @@ update never reflashes the panda unnecessarily.
    that account's keys when the GitHub username is entered (Settings → Network → Advanced → SSH Keys; done
    2026-05-26), so after adding the new key press **Remove** and **Add** `SkydiverRedMan` again to refresh. Then test:
    `ssh comma@192.168.68.134 echo ok`.
-2. **Comma on the same Wi-Fi**, car parked. The last known address is `192.168.68.134`; check it in FrogPilot →
+2. **Comma on the same Wi-Fi**, car parked. The address was `192.168.68.134` in May and `192.168.68.142` on 2026-11-16; check it in FrogPilot →
    Navigation → "Manage Your Settings At".
 3. GitHub push access from this PC already works (it pushed the `na2bk` backup).
 
@@ -60,17 +60,28 @@ git push origin na2-src
 ```
 
 ```bash
-ssh comma@192.168.68.134 'bash -s' < tools/na2/build_on_device.sh
-```
-
-(openpilot stops during the 15-40 minute build and restarts afterwards, even if the build fails.)
-
-```bash
-tools/na2/publish_from_pc.sh 192.168.68.134 --dry-run
+ssh comma@<comma-ip> "cat > /data/na2_build.sh" < tools/na2/build_on_device.sh
 ```
 
 ```bash
-tools/na2/publish_from_pc.sh 192.168.68.134
+ssh comma@<comma-ip> "setsid nohup bash /data/na2_build.sh > /data/na2_build.log 2>&1 < /dev/null &"
+```
+
+```bash
+ssh comma@<comma-ip> "tail -f /data/na2_build.log"
+```
+
+openpilot stops during the 15-40 minute build (the screen looks frozen; **don't tap it**), and the comma reboots when
+the build ends, even if it fails. The build runs detached, so closing SSH doesn't stop it. It leaves the release as
+`/data/na2_build/release.bundle`, which the publish script copies over SSH (the comma's partial clone can't serve a
+plain `git fetch`).
+
+```bash
+tools/na2/publish_from_pc.sh <comma-ip> --dry-run
+```
+
+```bash
+tools/na2/publish_from_pc.sh <comma-ip>
 ```
 
 Then on the comma: **Settings → Software → Check / Update**, and reboot when it asks.

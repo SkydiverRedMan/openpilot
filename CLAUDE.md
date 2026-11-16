@@ -26,7 +26,7 @@ Personal FrogPilot fork for Keith's comma 3X in a Toyota Highlander. Never push 
 
 1. Edit on `na2-src`, run `pytest frogpilot/navigation_assist/tests` (or the Docker command in
    `docs/navigation-assist/TESTING.md`), commit, `git push origin na2-src`.
-2. Car parked, comma on Wi-Fi: `ssh comma@<comma-ip> 'bash -s' < tools/na2/build_on_device.sh`.
+2. Car parked, comma on Wi-Fi: copy `tools/na2/build_on_device.sh` to the comma and run it detached (exact commands in DEPLOYMENT.md). Don't tap the comma screen during the build.
 3. `tools/na2/publish_from_pc.sh <comma-ip> --dry-run`, then without `--dry-run`.
 4. On the comma: Settings → Software → Update. Roll back with `tools/na2/rollback.sh`.
 
@@ -42,4 +42,4 @@ Details: `docs/navigation-assist/DEPLOYMENT.md`. Status of milestones: `docs/nav
   account, then on the comma re-add the GitHub username under SSH Keys so it fetches the new key.
 * Docker Desktop is only needed for the PC build/render checks (`Dockerfile.openpilot_base`); unit tests also run in
   `python:3.11-slim` with `pytest` and `pycapnp==2.0.0`.
-* Last known comma address: `192.168.68.134` (check FrogPilot → Navigation → "Manage Your Settings At").
+* Last known comma address: `192.168.68.142` (2026-11-16; it changes) (check FrogPilot → Navigation → "Manage Your Settings At").

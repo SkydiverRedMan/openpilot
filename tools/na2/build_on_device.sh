@@ -11,7 +11,7 @@
 #   ssh comma@<comma-ip> "setsid nohup bash /data/na2_build.sh > /data/na2_build.log 2>&1 < /dev/null &"
 #   ssh comma@<comma-ip> "tail -f /data/na2_build.log"     # watch; safe to disconnect
 #
-# openpilot is stopped while compiling and restarted afterwards, even on failure.
+# openpilot is stopped while compiling; the comma reboots afterwards, even on failure. Do not tap the screen meanwhile.
 set -euo pipefail
 
 REPO="${REPO:-https://github.com/SkydiverRedMan/openpilot.git}"
@@ -44,7 +44,9 @@ log "Source $SOURCE_SHA, current $RELEASE_BRANCH $BASE_SHA"
 
 log "Stopping openpilot for the build"
 sudo systemctl stop comma
-trap 'log "Starting openpilot"; sudo systemctl start comma' EXIT
+# Reboot rather than "systemctl start comma": /usr/comma/comma.sh opens the factory-reset screen when the
+# screen was tapped more than 4 times since power-on (easy to do while the screen looks frozen during a build).
+trap 'log "Rebooting to restart openpilot"; sync; sudo reboot' EXIT
 
 export WORK
 export BUILD='source /etc/profile
