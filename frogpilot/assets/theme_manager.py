@@ -16,6 +16,9 @@ THEME_PACK_COMPONENTS = ("colors", "distance_icons", "icons", "signals", "sounds
 
 WHEEL_EXTENSIONS = (".gif", ".png", ".svg")
 
+# Keith: the paramotor wheel is always shown, except during holiday themes and random events (both still change it)
+KEITH_WHEEL = "paramotor"
+
 class ThemeManager:
   def __init__(self, params):
     self.params = params
@@ -473,7 +476,7 @@ class ThemeManager:
         "icon_pack": ("icons", selected_theme),
         "sound_pack": ("sounds", base_theme),
         "turn_signal_pack": ("signals", base_theme),
-        "wheel_image": ("wheel_image", self.randomize_matching_asset(wheels, available_themes, base_theme))
+        "wheel_image": ("wheel_image", KEITH_WHEEL),  # never randomized
       }
     elif not frogpilot_toggles.random_themes:
       asset_mappings = {
@@ -482,7 +485,7 @@ class ThemeManager:
         "icon_pack": ("icons", frogpilot_toggles.icon_pack),
         "sound_pack": ("sounds", frogpilot_toggles.sound_pack),
         "turn_signal_pack": ("signals", frogpilot_toggles.signal_icons),
-        "wheel_image": ("wheel_image", frogpilot_toggles.wheel_image)
+        "wheel_image": ("wheel_image", KEITH_WHEEL)
       }
     else:
       return
