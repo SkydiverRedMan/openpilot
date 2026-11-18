@@ -16,8 +16,12 @@ public:
   void closeSpeedLimitPicker();
   void openSpeedLimitPicker();
   bool speedLimitPickerHit(const QPoint &pos, float *speedLimit) const;
+  // Hold the sign instead: the cruise setting becomes the saved limit (m/s), or 0 when it's off or above 85 mph / 140 km/h
+  float cruiseSpeedAsLimit() const;
 
   bool speedLimitPickerOpen = false;
+
+  float cruiseSetSpeed = 0.0f;  // what the screen shows as MAX, in mph or km/h
 
   void paintAdjacentPaths(QPainter &p);
   void paintBlindSpotPath(QPainter &p);

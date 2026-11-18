@@ -9,8 +9,10 @@ then on, ahead of the camera, map, navigation and every priority setting.
   (the one shown, and 5, 10 and 15 mph either side; 10 km/h steps in metric). Tap the real one. You'll see
   "Speed limit saved: 45 mph" with a chime. If the road already has a saved limit, the eighth button is **Clear**;
   otherwise it's **Cancel**. The panel closes after 8 seconds or on any other tap.
-* **Why not "save my cruise speed":** Keith's speed limit offsets (+5 up to 44 mph, +8 to 64, +11 above) mean the
-  set speed is never the actual limit.
+* **Or hold the sign (0.8 s) to save your cruise setting:** set cruise to exactly the posted limit with the wheel
+  buttons, hold the sign, see "Speed limit saved", then set cruise back up (e.g. 95). Holding only saves when cruise is
+  on and set to 85 mph (140 km/h) or less; at a higher setting, such as the usual 95, holding opens the panel instead,
+  so it can't save a wrong limit. Offsets don't matter here because cruise is set to the exact limit at that moment.
 * **Afterwards, from a phone:** The Pond → Settings → **Saved Speed Limits** lists every saved road, with Change and
   Remove, plus **Download backup** and **Restore from backup**. The Pond is locked while driving.
 * The speed limit sources panel shows a **Saved** row in place of **Map Data** when a saved limit applies.
@@ -38,7 +40,7 @@ then on, ahead of the camera, map, navigation and every priority setting.
 | Save request from the screen | `frogpilot/controls/frogpilot_planner.py` (`handle_saved_speed_limit_request`) |
 | Alerts | `selfdrive/controls/lib/events.py`, `frogpilot/controls/lib/frogpilot_events.py` |
 | Schema | `cereal/custom.capnp`: `FrogPilotUIEvent.saveSpeedLimit`, `FrogPilotPlan.slcSavedSpeedLimit`, 3 events |
-| Sign tap and picker | `selfdrive/ui/qt/onroad/onroad_home.cc`, `frogpilot/ui/qt/onroad/frogpilot_annotated_camera.cc` |
+| Sign tap, hold and picker | `selfdrive/ui/qt/onroad/onroad_home.cc`, `frogpilot/ui/qt/onroad/frogpilot_annotated_camera.cc` |
 | The Pond | `frogpilot/system/the_pond/saved_speed_limits.py`, `assets/js/pages/speed_limits.js` |
 
 The schema and Qt changes need a full rebuild on the comma (`tools/na2/build_on_device.sh`).
@@ -55,5 +57,5 @@ Without an openpilot environment, use a venv with `pytest numpy pycapnp==2.0.0 a
 
 | Date | What | Result |
 |---|---|---|
-| 2026-11-18 | Unit tests on Windows (Python 3.12, pycapnp 2.0.0) | 34 passed. Navigation Assist tests still 115 passed, 1 skipped |
+| 2026-11-18 | Unit tests on Windows (Python 3.12, pycapnp 2.0.0) | 35 passed. Navigation Assist tests still 115 passed, 1 skipped |
 | 2026-11-18 | C++ / Qt | **Not compiled yet**: needs the on-device build |

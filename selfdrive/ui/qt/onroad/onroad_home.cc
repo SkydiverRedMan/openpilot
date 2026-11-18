@@ -2,6 +2,7 @@
 
 #include <QPainter>
 #include <QStackedLayout>
+#include <QTimer>
 
 #ifdef ENABLE_MAPS
 #include "selfdrive/ui/qt/maps/map_helpers.h"
@@ -18,6 +19,11 @@ OnroadWindow::OnroadWindow(QWidget *parent) : QWidget(parent) {
   main_layout->addLayout(stacked_layout);
 
   nvg = new AnnotatedCameraWidget(VISION_STREAM_ROAD, this);
+
+  signHoldTimer = new QTimer(this);
+  signHoldTimer->setSingleShot(true);
+  signHoldTimer->setInterval(800);
+  QObject::connect(signHoldTimer, &QTimer::timeout, this, &OnroadWindow::signHeld);
 
   QWidget * split_wrapper = new QWidget;
   split = new QHBoxLayout(split_wrapper);
@@ -120,7 +126,7 @@ void OnroadWindow::mousePressEvent(QMouseEvent* e) {
     return;
   }
 
-  // Saved speed limits: tap the sign to pick the real limit; any tap closes the picker
+  // Saved speed limits: tap the sign to pick the real limit, hold it to save the cruise setting; any tap closes the picker
   FrogPilotAnnotatedCameraWidget *frogpilot_nvg = nvg->frogpilot_nvg;
   QPoint nvg_pos = nvg->mapFrom(this, e->pos());
   if (frogpilot_nvg->speedLimitPickerOpen) {
@@ -133,7 +139,8 @@ void OnroadWindow::mousePressEvent(QMouseEvent* e) {
   }
   bool signShown = (frogpilot_nvg->mutcdSpeedLimit || frogpilot_nvg->viennaSpeedLimit) && !frogpilot_nvg->bigMapOpen;
   if (signShown && nvg->isVisible() && frogpilot_nvg->speedLimitRect.contains(nvg_pos)) {
-    frogpilot_nvg->openSpeedLimitPicker();
+    // Decided on release (short tap) or when the hold timer fires (held 0.8 s)
+    signHoldTimer->start();
     return;
   }
 
@@ -146,6 +153,25 @@ void OnroadWindow::mousePressEvent(QMouseEvent* e) {
 #endif
   // propagation event to parent(HomeWindow)
   QWidget::mousePressEvent(e);
+}
+
+void OnroadWindow::mouseReleaseEvent(QMouseEvent* e) {
+  if (signHoldTimer->isActive()) {
+    signHoldTimer->stop();
+    nvg->frogpilot_nvg->openSpeedLimitPicker();
+    return;
+  }
+  QWidget::mouseReleaseEvent(e);
+}
+
+void OnroadWindow::signHeld() {
+  // Cruise off or above 85 mph (140 km/h), e.g. the usual 95: open the picker instead of saving a wrong limit
+  float speedLimit = nvg->frogpilot_nvg->cruiseSpeedAsLimit();
+  if (speedLimit > 0.0f) {
+    frogpilotUIState()->saveSpeedLimit(speedLimit);
+  } else {
+    nvg->frogpilot_nvg->openSpeedLimitPicker();
+  }
 }
 
 void OnroadWindow::createMapWidget() {

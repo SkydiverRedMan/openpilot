@@ -249,6 +249,7 @@ void AnnotatedCameraWidget::drawHud(QPainter &p, const cereal::FrogPilotPlan::Re
   frogpilot_nvg->experimentalButtonPosition = QPoint(experimental_btn->x(), experimental_btn->y());
   frogpilot_nvg->hideBottomIcons = hideBottomIcons;
   frogpilot_nvg->isCruiseSet = is_cruise_set;
+  frogpilot_nvg->cruiseSetSpeed = setSpeed;
   frogpilot_nvg->mapButtonEnabled = map_settings_btn->isEnabled();
   frogpilot_nvg->mutcdSpeedLimit = has_us_speed_limit;
   frogpilot_nvg->rightHandDM = rightHandDM;

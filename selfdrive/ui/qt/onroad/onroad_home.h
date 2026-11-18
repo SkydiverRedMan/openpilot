@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QTimer>
+
 #include "selfdrive/ui/qt/onroad/alerts.h"
 #include "selfdrive/ui/qt/onroad/annotated_camera.h"
 
@@ -20,6 +22,7 @@ private:
   void createMapWidget();
   void paintEvent(QPaintEvent *event);
   void mousePressEvent(QMouseEvent* e) override;
+  void mouseReleaseEvent(QMouseEvent* e) override;
   OnroadAlerts *alerts;
   AnnotatedCameraWidget *nvg;
   QColor bg = bg_colors[STATUS_DISENGAGED];
@@ -30,6 +33,10 @@ private:
   void resizeEvent(QResizeEvent *event) override;
 
   FrogPilotOnroadWindow *frogpilot_onroad;
+
+  // Saved speed limits: a short tap on the sign opens the picker, holding it saves the cruise setting
+  void signHeld();
+  QTimer *signHoldTimer;
 
 private slots:
   void offroadTransition(bool offroad);

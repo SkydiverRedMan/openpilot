@@ -477,6 +477,18 @@ void FrogPilotAnnotatedCameraWidget::closeSpeedLimitPicker() {
   update();
 }
 
+float FrogPilotAnnotatedCameraWidget::cruiseSpeedAsLimit() const {
+  bool metric = speedConversion > 3.0f;  // 3.6 for km/h, 2.24 for mph
+  int lowest = metric ? 8 : 5;
+  int highest = metric ? 140 : 85;
+
+  int cruise = static_cast<int>(std::lround(cruiseSetSpeed));
+  if (!isCruiseSet || cruise < lowest || cruise > highest || speedConversion <= 0.0f) {
+    return 0.0f;
+  }
+  return cruise / speedConversion;
+}
+
 bool FrogPilotAnnotatedCameraWidget::speedLimitPickerHit(const QPoint &pos, float *speedLimit) const {
   for (const SpeedLimitChoice &choice : speedLimitChoices) {
     if (choice.rect.contains(pos)) {
