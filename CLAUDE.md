@@ -27,11 +27,30 @@ Personal FrogPilot fork for Keith's comma 3X in a Toyota Highlander. Never push 
 
 ## Workflow
 
-1. Edit on `na2-src`, run `pytest frogpilot/navigation_assist/tests` (or the Docker command in
-   `docs/navigation-assist/TESTING.md`), commit, `git push origin na2-src`.
-2. Car parked, comma on Wi-Fi: copy `tools/na2/build_on_device.sh` to the comma and run it detached (exact commands in DEPLOYMENT.md). Don't tap the comma screen during the build.
-3. `tools/na2/publish_from_pc.sh <comma-ip> --dry-run`, then without `--dry-run`.
+1. Edit on `na2-src`, run `pytest frogpilot/navigation_assist/tests frogpilot/controls/lib/tests` (or the Docker / venv
+   commands in `docs/navigation-assist/TESTING.md` and `docs/saved-speed-limits.md`), commit, `git push origin na2-src`.
+2. Car parked (or the comma on house power), comma on Wi-Fi. Pick one:
+   * **Only Python / JS / HTML / CSS / images / sounds changed:** `tools/na2/quick_release_on_device.sh` on the comma.
+     Takes a minute or two, no compile, no reboot. It refuses if anything compiled changed.
+   * **Anything compiled changed** (C/C++/Qt, `cereal/*.capnp`, params, SConscripts, panda, models):
+     `tools/na2/build_on_device.sh`, 15-40 min, comma reboots at the end. Don't tap the comma screen during it.
+   Copy the script to the comma and run it detached; exact commands in DEPLOYMENT.md.
+3. `tools/na2/publish_from_pc.sh <comma-ip>` (add `--dry-run` to only check). Keith prefers no separate dry run when
+   the publish itself runs the same checks; just publish and he presses Update.
 4. On the comma: Settings → Software → Update. Roll back with `tools/na2/rollback.sh`.
+
+## Lessons learned (2026-11-18)
+
+* **Large copies from the comma stall** on this network: scp and `ssh cat` hung or were reset after ~100-300 KB, while
+  short SSH commands always worked. `publish_from_pc.sh` now copies the release in 32 KB pieces with retries and
+  checks the SHA-256. Use the same trick for any file over ~100 KB.
+* **The comma's address changes.** 2026-11-18 it was `192.168.68.105`. If `.142`/`.105` time out, scan for it:
+  PowerShell port scan of `192.168.68.2-254` for port 22, then `ssh comma@<ip> hostname` (it answers
+  `comma-521986ac`). `192.168.68.114` is the Mac.
+* **No compile needed ≠ no release needed.** The comma only installs prebuilt `na2` commits. A Python-only change
+  still needs a release, but the quick script makes it without recompiling (first done by hand: `33e5b3f`).
+* **This PC has no Docker.** Tests ran in a venv instead (`pytest numpy pycapnp==2.0.0 aiohttp`) with a directory
+  junction named `openpilot` pointing at the repo on `PYTHONPATH`; see `docs/saved-speed-limits.md`.
 
 Details: `docs/navigation-assist/DEPLOYMENT.md`. Status of milestones: `docs/navigation-assist/ARCHITECTURE.md`.
 
@@ -48,4 +67,4 @@ Details: `docs/navigation-assist/DEPLOYMENT.md`. Status of milestones: `docs/nav
   account, then on the comma re-add the GitHub username under SSH Keys so it fetches the new key.
 * Docker Desktop is only needed for the PC build/render checks (`Dockerfile.openpilot_base`); unit tests also run in
   `python:3.11-slim` with `pytest` and `pycapnp==2.0.0`.
-* Last known comma address: `192.168.68.142` (2026-11-16; it changes) (check FrogPilot → Navigation → "Manage Your Settings At").
+* Last known comma address: `192.168.68.105` (2026-11-18; it changes) (check FrogPilot → Navigation → "Manage Your Settings At").

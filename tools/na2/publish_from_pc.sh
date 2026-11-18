@@ -24,7 +24,26 @@ CURRENT="$(git rev-parse "refs/remotes/$REMOTE/$RELEASE_BRANCH")"
 log "Fetching the release built on the comma ($IP)"
 git fetch "$REMOTE" "+refs/heads/na2-src:refs/remotes/$REMOTE/na2-src"   # the bundle's source parent
 BUNDLE="$(git rev-parse --git-dir)/na2-release.bundle"
-scp -q "comma@$IP:$WORK/release.bundle" "$BUNDLE"
+# Copy in 32 KB pieces, each over its own short SSH call with retries. On 2026-11-18 any single transfer from the comma
+# over ~100 KB stalled (scp and plain `ssh cat` both hung or were reset), while small calls always worked.
+CHUNK=32768
+SIZE="$(ssh -o BatchMode=yes -o ConnectTimeout=10 "comma@$IP" "stat -c %s $WORK/release.bundle")"
+PIECES=$(( (SIZE + CHUNK - 1) / CHUNK ))
+log "Copying $SIZE bytes in $PIECES pieces"
+: > "$BUNDLE"
+for ((i = 0; i < PIECES; i++)); do
+  for try in 1 2 3 4 5; do
+    if timeout 30 ssh -o BatchMode=yes -o ConnectTimeout=10 "comma@$IP" \
+         "dd if=$WORK/release.bundle bs=$CHUNK skip=$i count=1 2>/dev/null | base64 -w0" > "$BUNDLE.piece" 2>/dev/null && [ -s "$BUNDLE.piece" ]; then
+      break
+    fi
+    [ "$try" = 5 ] && { log "piece $i failed 5 times"; exit 1; }
+  done
+  base64 -d "$BUNDLE.piece" >> "$BUNDLE"
+done
+rm -f "$BUNDLE.piece"
+REMOTE_SUM="$(ssh -o BatchMode=yes -o ConnectTimeout=10 "comma@$IP" "sha256sum $WORK/release.bundle" | cut -d' ' -f1)"
+[ "$(sha256sum "$BUNDLE" | cut -d' ' -f1)" = "$REMOTE_SUM" ] || { log "copy doesn't match the comma's file"; exit 1; }
 git bundle verify "$BUNDLE" >/dev/null
 git fetch "$BUNDLE" "+refs/heads/release:refs/remotes/device/release"
 RELEASE="$(git rev-parse refs/remotes/device/release)"
