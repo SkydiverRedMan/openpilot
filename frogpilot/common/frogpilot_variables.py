@@ -1195,6 +1195,7 @@ SPEED_LIMIT_SOURCES = {
   "MAP_DATA": "Map Data",
   "NAVIGATION": "Navigation",
   "NONE": "None",
+  "SAVED": "Saved",  # set by the driver (tap the sign, or The Pond); always wins
 }
 
 STARTUP_ALERT_MAX_LENGTHS = {"StartupMessageBottom": 45, "StartupMessageTop": 35}

@@ -54,6 +54,7 @@ public:
   void requestAccountLink();
   void requestAccountUrl(const QString &purpose);
   void runUpdateChecks();
+  void saveSpeedLimit(float speedLimit);
   void screenRecorderEvent(cereal::FrogPilotCarEvent::EventName event);
   void setDistanceButtonPressed(bool pressed);
   void setTethering(int mode);

@@ -1,3 +1,6 @@
+#include <algorithm>
+#include <cmath>
+
 #include <QPainterPath>
 #include <QStyle>
 
@@ -228,6 +231,8 @@ void FrogPilotAnnotatedCameraWidget::updateState(const UIState &s, const FrogPil
   nextSpeedLimit = frogpilotPlan.getSlcNextSpeedLimit();
   redLight = frogpilotPlan.getRedLight();
   roadCurvature = frogpilotPlan.getRoadCurvature();
+  savedSpeedLimit = frogpilotPlan.getSlcSavedSpeedLimit();
+  slcSpeedLimit = frogpilotPlan.getSlcSpeedLimit();
   speedLimitChanged = frogpilotPlan.getSpeedLimitChanged();
   speedLimitSource = frogpilotPlan.getSlcSpeedLimitSource();
   unconfirmedSpeedLimit = frogpilotPlan.getUnconfirmedSlcSpeedLimit();
@@ -272,6 +277,11 @@ void FrogPilotAnnotatedCameraWidget::updateState(const UIState &s, const FrogPil
     }
   } else {
     pendingLimitTimer.invalidate();
+  }
+
+  // The picker closes by itself, and gives way to FrogPilot's own "pending limit" sign, which sits in the same spot
+  if (speedLimitPickerOpen && (speedLimitChanged || speedLimitPickerTimer.elapsed() > 8000)) {
+    closeSpeedLimitPicker();
   }
 
   if (frogpilot_scene.standstill && frogpilot_toggles.value(QLatin1String("stopped_timer")).toBool()) {
@@ -426,6 +436,97 @@ void FrogPilotAnnotatedCameraWidget::paintFrogPilotWidgets(QPainter &p) {
   if (showBottomIcons && !frogpilot_scene.map_open) {
     paintWeather(p, weatherPosition);
   }
+
+  if (speedLimitPickerOpen) {
+    paintSpeedLimitPicker(p);
+  }
+}
+
+void FrogPilotAnnotatedCameraWidget::openSpeedLimitPicker() {
+  bool metric = speedConversion > 3.0f;  // 3.6 for km/h, 2.24 for mph
+  int step = metric ? 10 : 5;
+  int lowest = metric ? 20 : 10;
+  int highest = metric ? 140 : 85;
+
+  // Centre the choices on the limit the sign shows, or on the current speed when it shows none
+  float shown = slcSpeedLimit * speedConversion;
+  bool hasShown = shown >= 1.0f;
+  int base = static_cast<int>(std::lround((hasShown ? shown : vEgo * speedConversion) / step)) * step;
+  base = std::clamp(base, lowest + 3 * step, highest - 3 * step);
+
+  speedLimitChoices.clear();
+  for (int i = -3; i <= 3; ++i) {
+    int value = base + i * step;
+    speedLimitChoices.append({value / speedConversion, QString::number(value), hasShown && std::abs(value - shown) < 1.0f, QRect()});
+  }
+  if (savedSpeedLimit >= 1.0f) {
+    speedLimitChoices.append({0.0f, tr("Clear"), false, QRect()});
+  } else {
+    speedLimitChoices.append({-1.0f, tr("Cancel"), false, QRect()});
+  }
+
+  speedLimitPickerOpen = true;
+  speedLimitPickerTimer.start();
+  update();
+}
+
+void FrogPilotAnnotatedCameraWidget::closeSpeedLimitPicker() {
+  speedLimitPickerOpen = false;
+  speedLimitPickerRect = QRect();
+  speedLimitPickerTimer.invalidate();
+  update();
+}
+
+bool FrogPilotAnnotatedCameraWidget::speedLimitPickerHit(const QPoint &pos, float *speedLimit) const {
+  for (const SpeedLimitChoice &choice : speedLimitChoices) {
+    if (choice.rect.contains(pos)) {
+      *speedLimit = choice.speedLimit;
+      return true;
+    }
+  }
+  return false;
+}
+
+void FrogPilotAnnotatedCameraWidget::paintSpeedLimitPicker(QPainter &p) {
+  p.save();
+
+  const int columns = 4;
+  const int buttonWidth = 150;
+  const int buttonHeight = 130;
+  const int gap = 20;
+  const int padding = 20;
+  const int headerHeight = 60;
+
+  int rows = (speedLimitChoices.size() + columns - 1) / columns;
+  QSize panelSize(2 * padding + columns * buttonWidth + (columns - 1) * gap, headerHeight + padding + rows * buttonHeight + (rows - 1) * gap + padding);
+  speedLimitPickerRect = QRect(QPoint(speedLimitRect.right() + UI_BORDER_SIZE, speedLimitRect.top()), panelSize);
+
+  p.setPen(Qt::NoPen);
+  p.setBrush(blackColor(210));
+  p.drawRoundedRect(speedLimitPickerRect, 24, 24);
+
+  p.setPen(whiteColor());
+  p.setFont(InterFont(40, QFont::DemiBold));
+  p.drawText(speedLimitPickerRect.adjusted(padding, 0, -padding, 0).translated(0, padding / 2), Qt::AlignTop | Qt::AlignHCenter,
+             tr("Tap the real speed limit (%1)").arg(speedUnit.trimmed()));
+
+  for (int i = 0; i < speedLimitChoices.size(); ++i) {
+    SpeedLimitChoice &choice = speedLimitChoices[i];
+    int x = speedLimitPickerRect.left() + padding + (i % columns) * (buttonWidth + gap);
+    int y = speedLimitPickerRect.top() + headerHeight + padding + (i / columns) * (buttonHeight + gap);
+    choice.rect = QRect(x, y, buttonWidth, buttonHeight);
+
+    bool action = choice.speedLimit <= 0.0f;
+    p.setBrush(action ? QColor(70, 70, 70) : whiteColor());
+    p.setPen(choice.shown ? QPen(QColor(0x17, 0x86, 0x44), 10) : QPen(action ? whiteColor(120) : blackColor(), 4));
+    p.drawRoundedRect(choice.rect.adjusted(5, 5, -5, -5), 18, 18);
+
+    p.setPen(action ? whiteColor() : blackColor());
+    p.setFont(action ? InterFont(40, QFont::DemiBold) : InterFont(64, QFont::Bold));
+    p.drawText(choice.rect, Qt::AlignCenter, choice.label);
+  }
+
+  p.restore();
 }
 
 void FrogPilotAnnotatedCameraWidget::paintAdjacentPaths(QPainter &p) {
@@ -1150,7 +1251,11 @@ void FrogPilotAnnotatedCameraWidget::paintSpeedLimitSources(QPainter &p) {
 
   drawSource(rowRect, cameraIcon, QT_TR_NOOP("Camera"), cameraSpeedLimit * speedConversion);
   drawSource(rowRect, dashboardIcon, QT_TR_NOOP("Dashboard"), dashboardSpeedLimit * speedConversion);
-  drawSource(rowRect, mapDataIcon, QT_TR_NOOP("Map Data"), mapSpeedLimit * speedConversion);
+  if (savedSpeedLimit >= 1.0f) {
+    drawSource(rowRect, mapDataIcon, QT_TR_NOOP("Saved"), savedSpeedLimit * speedConversion);
+  } else {
+    drawSource(rowRect, mapDataIcon, QT_TR_NOOP("Map Data"), mapSpeedLimit * speedConversion);
+  }
   drawSource(rowRect, navigationIcon, QT_TR_NOOP("Navigation"), navigationSpeedLimit * speedConversion);
   drawSource(rowRect, nextMapsIcon, QT_TR_NOOP("Upcoming"), nextSpeedLimit * speedConversion);
 

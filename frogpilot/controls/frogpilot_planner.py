@@ -19,6 +19,7 @@ from openpilot.frogpilot.controls.lib.frogpilot_acceleration import FrogPilotAcc
 from openpilot.frogpilot.controls.lib.frogpilot_events import FrogPilotEvents
 from openpilot.frogpilot.controls.lib.frogpilot_following import FrogPilotFollowing
 from openpilot.frogpilot.controls.lib.frogpilot_vcruise import FrogPilotVCruise
+from openpilot.frogpilot.controls.lib.saved_speed_limits import SavedSpeedLimits
 from openpilot.frogpilot.controls.lib.speed_limit_filler import SpeedLimitFiller
 from openpilot.frogpilot.controls.lib.weather_checker import WeatherChecker
 
@@ -31,6 +32,11 @@ class FrogPilotPlanner:
     self.frogpilot_vcruise = FrogPilotVCruise(self)
     self.frogpilot_weather = WeatherChecker(frogpilot_api)
     self.speed_limit_filler = SpeedLimitFiller()
+    self.saved_speed_limits = SavedSpeedLimits()
+
+    # Driver's "save this speed limit" request from the driving screen: m/s, 0 to clear, None when there's none
+    self.saved_speed_limit_request = None
+    self.saved_speed_limit_event = None
 
     self.accel_pressed = False
     self.curve_ahead = False
@@ -82,6 +88,8 @@ class FrogPilotPlanner:
         self.frogpilot_events.screen_recorder_events.append(ui_event.screenRecorderEvent.raw)
       elif ui_event.which() == "speedLimitAccepted":
         self.frogpilot_vcruise.slc.speed_limit_accepted = True
+      elif ui_event.which() == "saveSpeedLimit":
+        self.saved_speed_limit_request = float(ui_event.saveSpeedLimit)
 
     self.lead_one = sm["radarState"].leadOne
 
@@ -130,6 +138,10 @@ class FrogPilotPlanner:
     if frogpilot_toggles.speed_limit_filler:
       self.speed_limit_filler.update(gps_position, map_match, v_ego, sm, frogpilot_toggles)
 
+    self.saved_speed_limits.refresh()
+    if self.saved_speed_limit_request is not None:
+      self.handle_saved_speed_limit_request(gps_position, map_match)
+
     if v_ego >= frogpilot_toggles.minimum_lane_change_speed:
       lane_widths, road_edge_distances = frogpilot_utilities.calculate_lane_widths(sm["modelV2"])
       self.lane_width_filter.update(lane_widths)
@@ -174,6 +186,27 @@ class FrogPilotPlanner:
       self.frogpilot_weather.weather_id = 0
     else:
       self.frogpilot_weather.invalidate()
+
+  def handle_saved_speed_limit_request(self, gps_position, map_match):
+    speed_limit = self.saved_speed_limit_request
+    self.saved_speed_limit_request = None
+
+    if not map_match:
+      # No GPS fix or no offline map for this road: nothing to attach the limit to
+      self.saved_speed_limit_event = "failed"
+      return
+
+    way_id, is_forward = map_match["way_id"], map_match["is_forward"]
+
+    if speed_limit <= 0:
+      self.saved_speed_limits.remove(way_id, is_forward)
+      self.saved_speed_limit_event = "cleared"
+      return
+
+    road_name = frogpilot_variables.params_memory.get("RoadName", encoding="utf-8") or ""
+    saved = self.saved_speed_limits.save(way_id, is_forward, speed_limit, road_name=road_name,
+                                         latitude=gps_position["latitude"], longitude=gps_position["longitude"])
+    self.saved_speed_limit_event = "saved" if saved else "failed"
 
   def is_lead_relevant(self, lead, standstill, v_ego):
     following_speed = max(v_ego, frogpilot_variables.CRUISING_SPEED)
@@ -234,6 +267,7 @@ class FrogPilotPlanner:
     frogpilotPlan.slcMapboxSpeedLimit = self.frogpilot_vcruise.slc.mapbox_speed_limit
     frogpilotPlan.slcNextSpeedLimit = self.frogpilot_vcruise.slc.next_speed_limit
     frogpilotPlan.slcOverriddenSpeed = self.frogpilot_vcruise.slc.overridden_speed
+    frogpilotPlan.slcSavedSpeedLimit = float(self.frogpilot_vcruise.slc.saved_speed_limit)
     frogpilotPlan.slcSpeedLimit = self.frogpilot_vcruise.slc_target
     frogpilotPlan.slcSpeedLimitOffset = self.frogpilot_vcruise.slc_offset
     frogpilotPlan.slcSpeedLimitSource = self.frogpilot_vcruise.slc.source

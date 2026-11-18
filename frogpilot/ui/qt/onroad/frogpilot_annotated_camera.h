@@ -12,6 +12,13 @@ public:
 
   static void drawOutlinedText(QPainter &p, const QPointF &position, const QString &text);
 
+  // Saved speed limits: tap the sign to open a row of limits, tap one to save it for this road
+  void closeSpeedLimitPicker();
+  void openSpeedLimitPicker();
+  bool speedLimitPickerHit(const QPoint &pos, float *speedLimit) const;
+
+  bool speedLimitPickerOpen = false;
+
   void paintAdjacentPaths(QPainter &p);
   void paintBlindSpotPath(QPainter &p);
   void paintFrogPilotWidgets(QPainter &p);
@@ -77,6 +84,7 @@ private:
   void paintRadarTracks(QPainter &p);
   void paintRoadName(QPainter &p);
   void paintSignFrame(QPainter &p, const QRect &rect, const QPen &pen, bool vienna);
+  void paintSpeedLimitPicker(QPainter &p);
   void paintSpeedLimitSources(QPainter &p);
   void paintStandstillTimer(QPainter &p);
   void paintStoppingPoint(QPainter &p);
@@ -131,6 +139,8 @@ private:
   float navigationSpeedLimit = 0.0f;
   float nextSpeedLimit = 0.0f;
   float roadCurvature = 0.0f;
+  float savedSpeedLimit = 0.0f;
+  float slcSpeedLimit = 0.0f;
   float speedConversionMetrics = 0.0f;
   float stoppingDistance = 0.0f;
   float unconfirmedSpeedLimit = 0.0f;
@@ -154,7 +164,17 @@ private:
   QElapsedTimer glowTimer;
   QElapsedTimer pendingLimitTimer;
   QElapsedTimer signalTimer;
+  QElapsedTimer speedLimitPickerTimer;
   QElapsedTimer standstillTimer;
+
+  struct SpeedLimitChoice {
+    float speedLimit;  // m/s; 0 removes the saved limit, -1 just closes the picker
+    QString label;
+    bool shown;        // the limit the sign shows right now
+    QRect rect;
+  };
+  QVector<SpeedLimitChoice> speedLimitChoices;
+  QRect speedLimitPickerRect;
 
   QPixmap brakePedalImg;
   QPixmap cameraIcon;

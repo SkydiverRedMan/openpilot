@@ -120,6 +120,23 @@ void OnroadWindow::mousePressEvent(QMouseEvent* e) {
     return;
   }
 
+  // Saved speed limits: tap the sign to pick the real limit; any tap closes the picker
+  FrogPilotAnnotatedCameraWidget *frogpilot_nvg = nvg->frogpilot_nvg;
+  QPoint nvg_pos = nvg->mapFrom(this, e->pos());
+  if (frogpilot_nvg->speedLimitPickerOpen) {
+    float speedLimit = -1.0f;
+    if (frogpilot_nvg->speedLimitPickerHit(nvg_pos, &speedLimit) && speedLimit >= 0.0f) {
+      fs.saveSpeedLimit(speedLimit);
+    }
+    frogpilot_nvg->closeSpeedLimitPicker();
+    return;
+  }
+  bool signShown = (frogpilot_nvg->mutcdSpeedLimit || frogpilot_nvg->viennaSpeedLimit) && !frogpilot_nvg->bigMapOpen;
+  if (signShown && nvg->isVisible() && frogpilot_nvg->speedLimitRect.contains(nvg_pos)) {
+    frogpilot_nvg->openSpeedLimitPicker();
+    return;
+  }
+
 #ifdef ENABLE_MAPS
   if (map != nullptr) {
     bool sidebarVisible = geometry().x() > 0;

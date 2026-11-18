@@ -17,7 +17,8 @@ Personal FrogPilot fork for Keith's comma 3X in a Toyota Highlander. Never push 
   Any change to C++/Qt, `cereal/*.capnp`, or `common/params.cc` keys needs a full rebuild on the comma
   (`tools/na2/build_on_device.sh`). Never replace a single binary, and never add a param key in Python only.
 * Keep Keith's customizations: paramotor boot logo and steering wheel, custom startup/engage sounds, Highlander BSM
-  (`selfdrive/car/toyota/interface.py`, `opendbc/toyota_tnga_k_pt_generated.dbc`), his default settings.
+  (`selfdrive/car/toyota/interface.py`, `opendbc/toyota_tnga_k_pt_generated.dbc`), his default settings, and saved speed
+  limits (`docs/saved-speed-limits.md`; data in `/data/saved_speed_limits.json`, never delete it).
 * Navigation Assist is advisory only: it must never publish anything controls, planners, models or lane-change code
   read, never steer/signal/change speed. See `docs/navigation-assist/`.
 * Install branches stay lean: tests and notes are kept out of `na2` by `release/prepare_release.py`.
