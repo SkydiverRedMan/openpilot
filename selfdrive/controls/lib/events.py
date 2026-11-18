@@ -395,6 +395,20 @@ def no_lane_available_alert(CP: car.CarParams, CS: car.CarState, sm: messaging.S
     Priority.LOWEST, VisualAlert.none, AudibleAlert.none, .2)
 
 
+def speed_limit_saved_alert(CP: car.CarParams, CS: car.CarState, sm: messaging.SubMaster, metric: bool, soft_disable_time: int, frogpilot_toggles: SimpleNamespace) -> Alert:
+  saved_speed_limit = sm["frogpilotPlan"].slcSavedSpeedLimit
+  if saved_speed_limit >= 1:
+    title = f"Speed limit saved: {get_display_speed(saved_speed_limit, metric)}"
+  else:
+    title = "Speed limit saved"
+
+  return Alert(
+    title,
+    "Used on this road from now on",
+    FrogPilotAlertStatus.frogpilot, AlertSize.mid,
+    Priority.LOW, VisualAlert.none, AudibleAlert.prompt, 3.)
+
+
 def pedal_interceptor_no_brake_alert(CP: car.CarParams, CS: car.CarState, sm: messaging.SubMaster, metric: bool, soft_disable_time: int, frogpilot_toggles: SimpleNamespace) -> Alert:
   return user_soft_disable_alert("Braking Unavailable: Shift to L")(CP, CS, sm, metric, soft_disable_time, frogpilot_toggles)
 
@@ -1164,6 +1178,26 @@ FROGPILOT_EVENTS: dict[int, dict[str, Alert | AlertCallbackType]] = {
       "Speed limit changed",
       "",
       FrogPilotAlertStatus.frogpilot, AlertSize.small,
+      Priority.LOW, VisualAlert.none, AudibleAlert.prompt, 3.),
+  },
+
+  FrogPilotEventName.speedLimitSaved: {
+    ET.PERMANENT: speed_limit_saved_alert,
+  },
+
+  FrogPilotEventName.speedLimitCleared: {
+    ET.PERMANENT: Alert(
+      "Saved speed limit removed",
+      "",
+      FrogPilotAlertStatus.frogpilot, AlertSize.small,
+      Priority.LOW, VisualAlert.none, AudibleAlert.prompt, 3.),
+  },
+
+  FrogPilotEventName.speedLimitSaveFailed: {
+    ET.PERMANENT: Alert(
+      "Couldn't save the speed limit",
+      "No GPS fix or map data for this road",
+      FrogPilotAlertStatus.frogpilot, AlertSize.mid,
       Priority.LOW, VisualAlert.none, AudibleAlert.prompt, 3.),
   },
 

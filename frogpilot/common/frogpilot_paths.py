@@ -79,6 +79,9 @@ OFFLINE_MAPS_SCHEMA_PATH = Path(__file__).parents[1] / "system/offline_maps.capn
 
 PARAMS_BACKUP_PATH = Path("/dev/shm/params_backup")
 
+SAVED_SPEED_LIMITS_PATH = Path("/data/saved_speed_limits.json")  # Keith's own limits; outside /data/openpilot so updates keep it
+SAVED_SPEED_LIMITS_BACKUP_PATH = Path("/data/media/0/saved_speed_limits_backup.json")
+
 SPEED_LIMIT_CAPTURES_PATH = Path("/data/media/speed_limit_captures")
 
 SPEED_LIMIT_FILLER_IMAGES_PATH = Path("/data/speed_limit_filler_images")

@@ -9,7 +9,7 @@ driving screen. It is **advisory only**: it never steers, changes lanes, signals
 |---|---|
 | `na2-src` | Source branch. FrogPilot's *October 31st, 2026 Update* source (`8d705650`) + Keith's customizations + Navigation Assist. All development happens here. |
 | `na2` | Prebuilt install branch the comma tracks. Produced from `na2-src` by `tools/na2/build_on_device.sh`. Never edit by hand. |
-| `na2bk` | Untouched copy of `na2` at `3fe4ed25` (before Navigation Assist). Rollback target. Tag `na2-baseline-2026-11-16` points at the same commit. |
+| `na2bk` | Untouched copy of `na2` at `840d0951` (before Navigation Assist). Rollback target. Tag `na2-baseline-2026-11-16` points at the same commit. |
 
 `na2` before this work was FrogPilot's prebuilt `Compile FrogPilot` commit (`a22c4767`) of source `8d705650`, plus two
 customization commits. Every source file on `na2-src` is byte-identical to `na2`; only compiled outputs differ.

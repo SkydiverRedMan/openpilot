@@ -104,6 +104,11 @@ struct FrogPilotCarEvent @0x81c2f05a394cf4af {
     vCruise69 @33;
     yourFrogTriedToKillMe @34;
     youveGotMail @35;
+
+    # Saved speed limits (Keith)
+    speedLimitSaved @36;
+    speedLimitCleared @37;
+    speedLimitSaveFailed @38;
   }
 }
 
@@ -236,6 +241,7 @@ struct FrogPilotPlan @0xa1680744031fdb2d {
   weatherDaytime @36 :Bool;
   weatherId @37 :Int16;
   wheelImageUpdateCount @38 :UInt64;
+  slcSavedSpeedLimit @39 :Float32;  # driver's saved limit for this road (m/s), 0 when none
 }
 
 struct FrogPilotProcessState @0x9ccdc8676701b412 {
@@ -302,6 +308,7 @@ struct FrogPilotUIEvent @0xc2243c65e0340384 {
     experimentalModePressed @1 :Void;
     screenRecorderEvent @2 :FrogPilotCarEvent.EventName;
     speedLimitAccepted @3 :Void;
+    saveSpeedLimit @4 :Float32;  # m/s; 0 removes the saved limit for this road
   }
 }
 

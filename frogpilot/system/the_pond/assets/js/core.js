@@ -403,6 +403,7 @@ const NAV = [
     { id: "models", label: "Driving Models", icon: "models" },
     { id: "keys", label: "Keys", icon: "keys" },
     { id: "maps", label: "Speed Limit Maps", icon: "maps" },
+    { id: "speed_limits", label: "Saved Speed Limits", icon: "flag" },
     { id: "startup", label: "Startup Alert", icon: "startup" },
     { id: "theme", label: "Theme Maker", icon: "pencil" },
     { id: "themes", label: "Themes", icon: "theme" },

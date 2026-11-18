@@ -188,6 +188,15 @@ class FrogPilotEvents:
     if self.frogpilot_planner.frogpilot_vcruise.slc.speed_limit_changed_timer == DT_MDL and frogpilot_toggles.speed_limit_changed_alert:
       self.events.add(FrogPilotEventName.speedLimitChanged)
 
+    saved_speed_limit_event = self.frogpilot_planner.saved_speed_limit_event
+    if saved_speed_limit_event is not None:
+      self.frogpilot_planner.saved_speed_limit_event = None
+      self.events.add({
+        "cleared": FrogPilotEventName.speedLimitCleared,
+        "failed": FrogPilotEventName.speedLimitSaveFailed,
+        "saved": FrogPilotEventName.speedLimitSaved,
+      }[saved_speed_limit_event])
+
     startup_alert_shown = sm["frogpilotControlsState"].alertText1 == frogpilot_toggles.startup_alert_top
     startup_alert_shown &= sm["frogpilotControlsState"].alertText2 == frogpilot_toggles.startup_alert_bottom
     self.startup_seen |= startup_alert_shown

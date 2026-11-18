@@ -16,8 +16,8 @@ from openpilot.system import sentry
 from openpilot.system.hardware import HARDWARE, PC
 
 from openpilot.frogpilot.common import frogpilot_paths, frogpilot_utilities, frogpilot_variables
-from openpilot.frogpilot.system.the_pond import (backups, dashcam, device, discovery, doors, home, keys, maps, models, navigation, screen_recordings, search,
-                                                 software, tailscale, theme_maker, themes, toggles, tools, utilities, vehicle)
+from openpilot.frogpilot.system.the_pond import (backups, dashcam, device, discovery, doors, home, keys, maps, models, navigation, saved_speed_limits,
+                                                 screen_recordings, search, software, tailscale, theme_maker, themes, toggles, tools, utilities, vehicle)
 
 API_VERSION = 1
 
@@ -284,6 +284,7 @@ def create_app():
   app.add_routes(maps.routes)
   app.add_routes(models.routes)
   app.add_routes(navigation.routes)
+  app.add_routes(saved_speed_limits.routes)
   app.add_routes(screen_recordings.routes)
   app.add_routes(search.routes)
   app.add_routes(software.routes)

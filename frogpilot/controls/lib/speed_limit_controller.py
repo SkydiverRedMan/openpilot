@@ -58,6 +58,7 @@ class SpeedLimitController:
     self.map_speed_limit = 0
     self.next_speed_limit = 0
     self.overridden_speed = 0
+    self.saved_speed_limit = 0
     self.speed_limit_changed_timer = 0
     self.target = 0
     self.unconfirmed_speed_limit = 0
@@ -99,6 +100,7 @@ class SpeedLimitController:
     self.map_speed_limit = 0
     self.next_speed_limit = 0
     self.overridden_speed = 0
+    self.saved_speed_limit = 0
     self.speed_limit_changed_timer = 0
     self.target = 0
     self.unconfirmed_speed_limit = 0
@@ -129,7 +131,8 @@ class SpeedLimitController:
       frogpilot_variables.params.put_bool_nonblocking("ExperimentalMode", True)
 
   def handle_limit_change(self, desired_source, desired_target, sm):
-    if desired_source == frogpilot_variables.SPEED_LIMIT_SOURCES["NONE"] or self.target == 0:
+    if desired_source in (frogpilot_variables.SPEED_LIMIT_SOURCES["NONE"], frogpilot_variables.SPEED_LIMIT_SOURCES["SAVED"]) or self.target == 0:
+      # A limit the driver saved is already confirmed by the driver
       confirmation_required = False
     elif desired_target < self.target:
       confirmation_required = self.frogpilot_toggles.speed_limit_confirmation_lower
@@ -194,7 +197,11 @@ class SpeedLimitController:
     }
     limits = {source: limit for source, limit in limits.items() if limit >= 1}
 
-    if self.frogpilot_toggles.speed_limit_priority_highest:
+    if self.saved_speed_limit >= 1:
+      # The driver's own limit for this road beats the camera, map and every priority setting
+      desired_source = frogpilot_variables.SPEED_LIMIT_SOURCES["SAVED"]
+      limits[desired_source] = self.saved_speed_limit
+    elif self.frogpilot_toggles.speed_limit_priority_highest:
       desired_source = max(limits, key=limits.get, default=frogpilot_variables.SPEED_LIMIT_SOURCES["NONE"])
     elif self.frogpilot_toggles.speed_limit_priority_lowest:
       desired_source = min(limits, key=limits.get, default=frogpilot_variables.SPEED_LIMIT_SOURCES["NONE"])
@@ -402,8 +409,34 @@ class SpeedLimitController:
 
     frogpilot_variables.params.put_nonblocking("MapBoxRequests", json.dumps(self.mapbox_requests))
 
+  def update_saved_speed_limit(self, map_match, v_ego):
+    saved_speed_limits = self.frogpilot_planner.saved_speed_limits
+
+    if not map_match:
+      self.saved_speed_limit = 0
+      return
+
+    self.saved_speed_limit = saved_speed_limits.get(map_match["way_id"], map_match["is_forward"])
+
+    # Switch to a saved limit on the next road segment early, using the same lookahead as map limits
+    for upcoming in map_match.get("next_speed_limits", []):
+      upcoming_limit = saved_speed_limits.get(upcoming["way_id"], upcoming["is_forward"])
+      if upcoming_limit <= 0 or abs(upcoming_limit - self.saved_speed_limit) < 1:
+        continue
+
+      if upcoming_limit > self.saved_speed_limit:
+        lookahead = self.frogpilot_toggles.map_speed_lookahead_higher
+      else:
+        lookahead = self.frogpilot_toggles.map_speed_lookahead_lower
+
+      if upcoming["distance"] < lookahead * v_ego:
+        self.saved_speed_limit = upcoming_limit
+      break
+
   def update_map_speed_limit(self, map_match, v_ego):
     speed_limit_filler = self.frogpilot_planner.speed_limit_filler
+
+    self.update_saved_speed_limit(map_match, v_ego)
 
     if not map_match:
       self.map_speed_limit = 0
