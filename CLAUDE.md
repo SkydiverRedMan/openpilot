@@ -8,7 +8,7 @@ Personal FrogPilot fork for Keith's comma 3X in a Toyota Highlander. Never push 
 |---|---|
 | `na2-src` | **Work here.** Source branch: FrogPilot "October 31st, 2026 Update" (`8d705650`) + Keith's customizations + Navigation Assist. |
 | `na2` | Prebuilt branch the comma installs from (Settings → Software → Update). Only ever updated by `tools/na2/publish_from_pc.sh`. Never edit or force-push. |
-| `na2bk` | Untouched na2 at `3fe4ed25` (2026-11-16, before Navigation Assist). Rollback target; tag `na2-baseline-2026-11-16`. |
+| `na2bk` | Untouched na2 at `840d0951` (2026-11-16, before Navigation Assist). Rollback target; tag `na2-baseline-2026-11-16`. |
 | others (`bsm`, `na`, `my-frogpilot*`) | Older experiments; leave alone. |
 
 ## Rules
@@ -36,6 +36,9 @@ Details: `docs/navigation-assist/DEPLOYMENT.md`. Status of milestones: `docs/nav
 
 ## Setting up another PC
 
+* **Commit email:** this repo is public, so every PC must commit as GitHub's no-reply address, never a personal or work email:
+  `git config user.email 110471467+SkydiverRedMan@users.noreply.github.com` (run inside the clone). History was rewritten
+  on 2026-11-18 to remove earlier emails (all commit IDs changed then); any older clone must be re-cloned, not pushed.
 * `git clone https://github.com/SkydiverRedMan/openpilot.git FrogPilot && cd FrogPilot && git switch na2-src`
   (no `--recurse-submodules` needed; this tree vendors its dependencies).
 * On Windows set `git config core.autocrlf true` for the clone (default for Git for Windows). When passing files to

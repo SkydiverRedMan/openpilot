@@ -103,7 +103,7 @@ are source branches and the comma would try to compile on boot.
 * **Roll back to any earlier na2 release:** `tools/na2/rollback.sh <commit>`.
 * **The comma does not boot into openpilot:** reinstall with the comma installer URL
   `installer.comma.ai/SkydiverRedMan/na2bk` (uninstall from the device's recovery/reset menu, then Custom Software).
-  `na2bk` and tag `na2-baseline-2026-11-16` are the untouched 2026-11-16 release `3fe4ed25`. Restore your settings
+  `na2bk` and tag `na2-baseline-2026-11-16` are the untouched 2026-11-16 release `840d0951`. Restore your settings
   from a toggle backup made **before** the update (see `KNOWN-LIMITATIONS.md`).
 * Before the first update, back up your toggles: The Pond → Manage Toggles → Backup Toggles.
 
