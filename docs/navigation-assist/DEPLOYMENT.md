@@ -89,6 +89,33 @@ Then on the comma: **Settings → Software → Check / Update**, and reboot when
 Before publishing, the dry run proves the exact commit is retrievable and builds on the current `na2`; after the push
 the script confirms GitHub's `na2` points at it, which is exactly what `updated` fetches.
 
+## Quick release (no compiling)
+
+For `na2-src` changes that are only Python, JavaScript, HTML, CSS, images, sounds or JSON. It takes the current `na2`,
+swaps in just the changed files, and packs the release like the full build does: a minute or two, openpilot keeps
+running, no reboot. It refuses when anything compiled or generated changed (C/C++/Qt, Cython, `cereal`, params,
+SConscripts, panda, opendbc, third_party, models) or when `na2` doesn't match its recorded source.
+
+```bash
+ssh comma@<comma-ip> "cat > /data/na2_quick.sh" < tools/na2/quick_release_on_device.sh
+```
+
+```bash
+ssh comma@<comma-ip> "bash /data/na2_quick.sh"
+```
+
+```bash
+tools/na2/publish_from_pc.sh <comma-ip>
+```
+
+First used 2026-11-18 (done by hand): the paramotor-wheel theme change went out as `33e5b3f` on top of build `beef7bf`.
+
+## Copying from the comma
+
+Since 2026-11-18 `publish_from_pc.sh` copies `release.bundle` in 32 KB pieces over separate SSH calls with retries,
+then compares SHA-256. A single large transfer (scp, or `ssh ... cat`) stalled after ~100-300 KB every time that day,
+even though small SSH commands worked. A 2 MB release takes about 4 minutes this way.
+
 ## Switching branches on the comma
 
 Settings → Software → **Target Branch** lists every branch in the repo, and Update installs the selected one. Only
