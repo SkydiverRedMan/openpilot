@@ -92,7 +92,7 @@ MESSAGE="Add $SOURCE_BRANCH $(git rev-parse --short "$NEW_SOURCE") to $RELEASE_B
 Quick release by tools/na2/quick_release_on_device.sh on $(hostname) at $(date -u +%Y-%m-%dT%H:%M:%SZ): only files that
 need no compiling changed; every compiled file is the same as in $(git rev-parse --short "$BASE").
 Parents: previous $RELEASE_BRANCH release, and the $SOURCE_BRANCH source commit it now matches."
-RELEASE_SHA="$(git -c user.name="${GIT_NAME:-SkydiverRedMan}" -c user.email="${GIT_EMAIL:-SkydiverRedMan@users.noreply.github.com}" \
+RELEASE_SHA="$(git -c user.name="${GIT_NAME:-SkydiverRedMan}" -c user.email="${GIT_EMAIL:-110471467+SkydiverRedMan@users.noreply.github.com}" \
   commit-tree "$TREE" -p "$BASE" -p "$NEW_SOURCE" -m "$MESSAGE")"
 git update-ref refs/heads/release "$RELEASE_SHA"
 

@@ -83,7 +83,7 @@ MESSAGE="Compile na2 from $SOURCE_BRANCH $(git rev-parse --short "$SOURCE_SHA")
 
 Prebuilt by tools/na2/build_on_device.sh on $(hostname) at $(date -u +%Y-%m-%dT%H:%M:%SZ).
 Parents: previous $RELEASE_BRANCH release, and the $SOURCE_BRANCH source commit it was built from."
-RELEASE_SHA="$(git -c user.name="${GIT_NAME:-SkydiverRedMan}" -c user.email="${GIT_EMAIL:-SkydiverRedMan@users.noreply.github.com}" \
+RELEASE_SHA="$(git -c user.name="${GIT_NAME:-SkydiverRedMan}" -c user.email="${GIT_EMAIL:-110471467+SkydiverRedMan@users.noreply.github.com}" \
   commit-tree "$TREE" -p "$BASE_SHA" -p "$SOURCE_SHA" -m "$MESSAGE")"
 git update-ref refs/heads/release "$RELEASE_SHA"
 
