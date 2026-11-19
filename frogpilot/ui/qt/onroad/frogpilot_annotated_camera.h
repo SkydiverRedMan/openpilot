@@ -176,6 +176,7 @@ private:
     QString label;
     bool shown;        // the limit the sign shows right now
     QRect rect;
+    bool cruise = false;  // the driver's cruise setting, drawn in blue to the right of the grid
   };
   QVector<SpeedLimitChoice> speedLimitChoices;
   QRect speedLimitPickerRect;

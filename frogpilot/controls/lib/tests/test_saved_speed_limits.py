@@ -360,23 +360,33 @@ def test_ui_sends_and_reads_the_new_fields():
   camera = (REPO / "frogpilot/ui/qt/onroad/frogpilot_annotated_camera.cc").read_text(encoding="utf-8")
   assert "getSlcSavedSpeedLimit()" in camera
   onroad = (REPO / "selfdrive/ui/qt/onroad/onroad_home.cc").read_text(encoding="utf-8")
-  assert onroad.index("speedLimitAccepted()") < onroad.index("signHoldTimer->start()")  # FrogPilot's pending sign keeps priority
+  assert onroad.index("speedLimitAccepted()") < onroad.index("frogpilot_nvg->openSpeedLimitPicker();")  # FrogPilot's pending sign keeps priority
 
 
-def test_hold_saves_cruise_speed_only_up_to_85_mph():
+def test_cruise_choice_only_up_to_85_mph():
   camera = (REPO / "frogpilot/ui/qt/onroad/frogpilot_annotated_camera.cc").read_text(encoding="utf-8")
   body = camera[camera.index("float FrogPilotAnnotatedCameraWidget::cruiseSpeedAsLimit()"):]
   body = body[:body.index("\n}\n")]
   assert "metric ? 140 : 85" in body and "cruise > highest" in body and "!isCruiseSet" in body
 
+  # The picker adds the cruise setting as its own blue choice, only when cruiseSpeedAsLimit() allows it
+  opener = camera[camera.index("void FrogPilotAnnotatedCameraWidget::openSpeedLimitPicker()"):]
+  opener = opener[:opener.index("\n}\n")]
+  assert "cruiseSpeedAsLimit()" in opener and "if (cruiseLimit > 0.0f)" in opener and "QRect(), true}" in opener
+  painter = camera[camera.index("void FrogPilotAnnotatedCameraWidget::paintSpeedLimitPicker"):]
+  painter = painter[:painter.index("\n}\n")]
+  assert "MY CRUISE" in painter and "cruiseColor" in painter and "cruiseRight" in painter and "cruiseBelow" in painter
+
+
+def test_touching_the_sign_opens_the_picker_without_hold_timing():
   onroad = (REPO / "selfdrive/ui/qt/onroad/onroad_home.cc").read_text(encoding="utf-8")
-  held = onroad[onroad.index("void OnroadWindow::signHeld()"):]
-  held = held[:held.index("\n}\n")]
-  # A valid cruise setting is saved; anything else (e.g. 95) opens the picker instead of saving
-  assert "saveSpeedLimit(speedLimit)" in held and "openSpeedLimitPicker()" in held
-  release = onroad[onroad.index("void OnroadWindow::mouseReleaseEvent"):]
-  assert release.index("signHoldTimer->isActive()") < release.index("openSpeedLimitPicker()")  # short tap opens the picker
-  assert "setInterval(800)" in onroad
+  press = onroad[onroad.index("void OnroadWindow::mousePressEvent"):]
+  press = press[:press.index("\n}\n")]
+  assert "frogpilot_nvg->openSpeedLimitPicker();" in press
+  for gone in ("signHoldTimer", "signHeld", "mouseReleaseEvent", "setInterval(800)"):
+    assert gone not in onroad
+  header = (REPO / "selfdrive/ui/qt/onroad/onroad_home.h").read_text(encoding="utf-8")
+  assert "signHoldTimer" not in header and "mouseReleaseEvent" not in header
 
   wiring = (REPO / "selfdrive/ui/qt/onroad/annotated_camera.cc").read_text(encoding="utf-8")
   assert "frogpilot_nvg->cruiseSetSpeed = setSpeed;" in wiring

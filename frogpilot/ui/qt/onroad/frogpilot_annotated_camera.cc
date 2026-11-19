@@ -465,6 +465,13 @@ void FrogPilotAnnotatedCameraWidget::openSpeedLimitPicker() {
     speedLimitChoices.append({-1.0f, tr("Cancel"), false, QRect()});
   }
 
+  // The cruise setting shown as MAX, as its own choice (replaces the old hold-to-save gesture). Same rule as before:
+  // only when cruise is on and at 85 mph (140 km/h) or less, so the usual 95 can't be saved as a limit.
+  float cruiseLimit = cruiseSpeedAsLimit();
+  if (cruiseLimit > 0.0f) {
+    speedLimitChoices.append({cruiseLimit, QString::number(static_cast<int>(std::lround(cruiseSetSpeed))), false, QRect(), true});
+  }
+
   speedLimitPickerOpen = true;
   speedLimitPickerTimer.start();
   update();
@@ -509,9 +516,21 @@ void FrogPilotAnnotatedCameraWidget::paintSpeedLimitPicker(QPainter &p) {
   const int padding = 20;
   const int headerHeight = 60;
 
-  int rows = (speedLimitChoices.size() + columns - 1) / columns;
-  QSize panelSize(2 * padding + columns * buttonWidth + (columns - 1) * gap, headerHeight + padding + rows * buttonHeight + (rows - 1) * gap + padding);
-  speedLimitPickerRect = QRect(QPoint(speedLimitRect.right() + UI_BORDER_SIZE, speedLimitRect.top()), panelSize);
+  const QColor cruiseColor(30, 110, 220);
+
+  bool hasCruise = !speedLimitChoices.isEmpty() && speedLimitChoices.last().cruise;
+  int gridCount = speedLimitChoices.size() - (hasCruise ? 1 : 0);
+  int rows = (gridCount + columns - 1) / columns;
+  int gridWidth = columns * buttonWidth + (columns - 1) * gap;
+  int gridHeight = rows * buttonHeight + (rows - 1) * gap;
+  QPoint origin(speedLimitRect.right() + UI_BORDER_SIZE, speedLimitRect.top());
+
+  // Cruise button as a fifth column on the right; if the camera view is too narrow (map open), as a row underneath
+  bool cruiseRight = hasCruise && origin.x() + 2 * padding + gridWidth + gap + buttonWidth <= width() - UI_BORDER_SIZE;
+  bool cruiseBelow = hasCruise && !cruiseRight;
+  QSize panelSize(2 * padding + gridWidth + (cruiseRight ? gap + buttonWidth : 0),
+                  headerHeight + padding + gridHeight + (cruiseBelow ? gap + buttonHeight : 0) + padding);
+  speedLimitPickerRect = QRect(origin, panelSize);
 
   p.setPen(Qt::NoPen);
   p.setBrush(blackColor(210));
@@ -522,10 +541,30 @@ void FrogPilotAnnotatedCameraWidget::paintSpeedLimitPicker(QPainter &p) {
   p.drawText(speedLimitPickerRect.adjusted(padding, 0, -padding, 0).translated(0, padding / 2), Qt::AlignTop | Qt::AlignHCenter,
              tr("Tap the real speed limit (%1)").arg(speedUnit.trimmed()));
 
+  int gridLeft = speedLimitPickerRect.left() + padding;
+  int gridTop = speedLimitPickerRect.top() + headerHeight + padding;
   for (int i = 0; i < speedLimitChoices.size(); ++i) {
     SpeedLimitChoice &choice = speedLimitChoices[i];
-    int x = speedLimitPickerRect.left() + padding + (i % columns) * (buttonWidth + gap);
-    int y = speedLimitPickerRect.top() + headerHeight + padding + (i / columns) * (buttonHeight + gap);
+    if (choice.cruise) {
+      choice.rect = cruiseRight ? QRect(gridLeft + gridWidth + gap, gridTop, buttonWidth, gridHeight)
+                                : QRect(gridLeft, gridTop + gridHeight + gap, gridWidth, buttonHeight);
+
+      p.setBrush(cruiseColor);
+      p.setPen(QPen(whiteColor(), 4));
+      p.drawRoundedRect(choice.rect.adjusted(5, 5, -5, -5), 18, 18);
+
+      p.setPen(whiteColor());
+      QRect numberRect = cruiseRight ? choice.rect.adjusted(0, 0, 0, -50) : choice.rect.adjusted(0, 0, -choice.rect.width() / 2 + 40, 0);
+      QRect captionRect = cruiseRight ? choice.rect.adjusted(0, choice.rect.height() - 90, 0, -20) : choice.rect.adjusted(choice.rect.width() / 2 - 20, 0, 0, 0);
+      p.setFont(InterFont(72, QFont::Bold));
+      p.drawText(numberRect, Qt::AlignCenter, choice.label);
+      p.setFont(InterFont(28, QFont::DemiBold));
+      p.drawText(captionRect, cruiseRight ? (Qt::AlignCenter | Qt::TextWordWrap) : (Qt::AlignVCenter | Qt::AlignLeft), tr("MY CRUISE"));
+      continue;
+    }
+
+    int x = gridLeft + (i % columns) * (buttonWidth + gap);
+    int y = gridTop + (i / columns) * (buttonHeight + gap);
     choice.rect = QRect(x, y, buttonWidth, buttonHeight);
 
     bool action = choice.speedLimit <= 0.0f;

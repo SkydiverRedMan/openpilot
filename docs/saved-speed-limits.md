@@ -5,14 +5,16 @@ then on, ahead of the camera, map, navigation and every priority setting.
 
 ## Using it
 
-* **While driving:** tap the speed limit sign on the driving screen. A panel opens next to it with seven limits
+* **While driving:** touch the speed limit sign on the driving screen. A panel opens next to it at once with seven limits
   (the one shown, and 5, 10 and 15 mph either side; 10 km/h steps in metric). Tap the real one. You'll see
   "Speed limit saved: 45 mph" with a chime. If the road already has a saved limit, the eighth button is **Clear**;
   otherwise it's **Cancel**. The panel closes after 8 seconds or on any other tap.
-* **Or hold the sign (0.8 s) to save your cruise setting:** set cruise to exactly the posted limit with the wheel
-  buttons, hold the sign, see "Speed limit saved", then set cruise back up (e.g. 95). Holding only saves when cruise is
-  on and set to 85 mph (140 km/h) or less; at a higher setting, such as the usual 95, holding opens the panel instead,
-  so it can't save a wrong limit. Offsets don't matter here because cruise is set to the exact limit at that moment.
+* **To save your cruise setting:** set cruise to exactly the posted limit with the wheel buttons, tap the sign, and tap
+  the blue **MY CRUISE** button on the right of the panel (it shows your cruise number). Then set cruise back up (e.g.
+  95). The blue button only appears when cruise is on and set to 85 mph (140 km/h) or less, so the usual 95 can't be
+  saved as a limit. When the map is open and the camera view is narrow, the blue button sits in a row under the others.
+  (Until 2026-11-19 this was "hold the sign 0.8 s"; on the road taps were often read as holds and saved the cruise
+  setting by mistake, so touching the sign now always opens the panel, right away.)
 * **Afterwards, from a phone:** The Pond → Settings → **Saved Speed Limits** lists every saved road, with Change and
   Remove, plus **Download backup** and **Restore from backup**. The Pond is locked while driving.
 * The speed limit sources panel shows a **Saved** row in place of **Map Data** when a saved limit applies.
@@ -40,7 +42,7 @@ then on, ahead of the camera, map, navigation and every priority setting.
 | Save request from the screen | `frogpilot/controls/frogpilot_planner.py` (`handle_saved_speed_limit_request`) |
 | Alerts | `selfdrive/controls/lib/events.py`, `frogpilot/controls/lib/frogpilot_events.py` |
 | Schema | `cereal/custom.capnp`: `FrogPilotUIEvent.saveSpeedLimit`, `FrogPilotPlan.slcSavedSpeedLimit`, 3 events |
-| Sign tap, hold and picker | `selfdrive/ui/qt/onroad/onroad_home.cc`, `frogpilot/ui/qt/onroad/frogpilot_annotated_camera.cc` |
+| Sign touch and picker | `selfdrive/ui/qt/onroad/onroad_home.cc`, `frogpilot/ui/qt/onroad/frogpilot_annotated_camera.cc` |
 | The Pond | `frogpilot/system/the_pond/saved_speed_limits.py`, `assets/js/pages/speed_limits.js` |
 
 The schema and Qt changes need a full rebuild on the comma (`tools/na2/build_on_device.sh`).
@@ -58,4 +60,5 @@ Without an openpilot environment, use a venv with `pytest numpy pycapnp==2.0.0 a
 | Date | What | Result |
 |---|---|---|
 | 2026-11-18 | Unit tests on Windows (Python 3.12, pycapnp 2.0.0) | 35 passed. Navigation Assist tests still 115 passed, 1 skipped |
-| 2026-11-18 | C++ / Qt | **Not compiled yet**: needs the on-device build |
+| 2026-11-18 | C++ / Qt | Built on the comma (`na2` `beef7bfc`) and driven |
+| 2026-11-19 | Drive log, route `00000028` | Three unintended 65 mph saves at 13:32 were holds (cruise 65); UI drew every frame in under 100 ms, so the hold timing itself misfired. Replaced by the blue MY CRUISE choice |
