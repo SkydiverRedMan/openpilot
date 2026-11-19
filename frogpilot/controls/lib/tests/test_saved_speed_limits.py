@@ -332,8 +332,11 @@ def test_planner_saves_clears_and_fails(monkeypatch, store):
 
 def test_schema_has_the_new_fields():
   capnp = pytest.importorskip("capnp")
-  capnp.remove_import_hook()
-  custom = capnp.load(str(REPO / "cereal/custom.capnp"), imports=[str(REPO / "cereal"), str(REPO / "cereal/include")])
+  try:
+    from cereal import custom  # full openpilot environment: schema already loaded (loading it again is a duplicate ID)
+  except ImportError:
+    capnp.remove_import_hook()
+    custom = capnp.load(str(REPO / "cereal/custom.capnp"), imports=[str(REPO / "cereal"), str(REPO / "cereal/include")])
 
   event = custom.FrogPilotUIEvent.new_message()
   event.saveSpeedLimit = 20.1
