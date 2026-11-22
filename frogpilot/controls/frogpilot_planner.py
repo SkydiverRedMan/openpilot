@@ -191,22 +191,42 @@ class FrogPilotPlanner:
     speed_limit = self.saved_speed_limit_request
     self.saved_speed_limit_request = None
 
-    if not map_match:
-      # No GPS fix or no offline map for this road: nothing to attach the limit to
-      self.saved_speed_limit_event = "failed"
-      return
-
-    way_id, is_forward = map_match["way_id"], map_match["is_forward"]
+    slc = self.frogpilot_vcruise.slc
 
     if speed_limit <= 0:
-      self.saved_speed_limits.remove(way_id, is_forward)
-      self.saved_speed_limit_event = "cleared"
+      # Clear: the road's saved limit if there is one, otherwise the GPS spot in effect
+      if map_match and self.saved_speed_limits.remove(map_match["way_id"], map_match["is_forward"]):
+        self.saved_speed_limit_event = "cleared"
+      elif slc.gps_latch is not None and self.saved_speed_limits.remove_key(slc.gps_latch["key"]):
+        slc.gps_latch = None
+        self.saved_speed_limit_event = "cleared"
+      else:
+        self.saved_speed_limit_event = "cleared" if map_match or gps_position else "failed"
       return
 
     road_name = frogpilot_variables.params_memory.get("RoadName", encoding="utf-8") or ""
-    saved = self.saved_speed_limits.save(way_id, is_forward, speed_limit, road_name=road_name,
-                                         latitude=gps_position["latitude"], longitude=gps_position["longitude"])
-    self.saved_speed_limit_event = "saved" if saved else "failed"
+
+    if map_match:
+      saved = self.saved_speed_limits.save(map_match["way_id"], map_match["is_forward"], speed_limit, road_name=road_name,
+                                           latitude=gps_position["latitude"], longitude=gps_position["longitude"])
+      self.saved_speed_limit_event = "saved" if saved else "failed"
+      return
+
+    if not gps_position:
+      # No GPS fix: nothing to attach the limit to
+      self.saved_speed_limit_event = "failed"
+      return
+
+    # No offline map here: pin the limit to this spot and heading, and put it in effect right away
+    bearing = gps_position["bearing"] % 360
+    key = self.saved_speed_limits.save_spot(gps_position["latitude"], gps_position["longitude"], bearing, speed_limit,
+                                            road_name=road_name)
+    if key is None:
+      self.saved_speed_limit_event = "failed"
+      return
+
+    slc.gps_latch = {"bearing": bearing, "key": key, "latitude": gps_position["latitude"], "longitude": gps_position["longitude"]}
+    self.saved_speed_limit_event = "saved"
 
   def is_lead_relevant(self, lead, standstill, v_ego):
     following_speed = max(v_ego, frogpilot_variables.CRUISING_SPEED)

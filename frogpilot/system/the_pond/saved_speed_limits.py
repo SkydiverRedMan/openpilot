@@ -27,11 +27,16 @@ def conversion(params):
 
 def get_key(request):
   key = request.match_info["key"]
-  try:
-    store.parse_way_key(key)
-  except ValueError:
-    raise web.HTTPNotFound(text="not_found") from None
+  if not store.is_valid_key(key):
+    raise web.HTTPNotFound(text="not_found")
   return key
+
+
+COMPASS = ("north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest")
+
+
+def compass(bearing):
+  return COMPASS[round((bearing % 360) / 45) % 8]
 
 
 def learned_entries():
@@ -88,8 +93,11 @@ async def list_saved_speed_limits(request):
 
   rows = []
   for key, entry in store.read_entries().items():
+    is_spot = entry.get("kind") == store.GPS_KIND
     rows.append({
+      "heading": compass(entry["bearing"]) if is_spot else None,
       "key": key,
+      "kind": "gps" if is_spot else "road",
       "latitude": entry.get("latitude"),
       "longitude": entry.get("longitude"),
       "road_name": entry.get("road_name", ""),

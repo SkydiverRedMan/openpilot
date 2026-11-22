@@ -11,6 +11,11 @@ from openpilot.common.swaglog import cloudlog
 from openpilot.selfdrive.navd.helpers import maxspeed_to_ms
 
 from openpilot.frogpilot.common import frogpilot_variables
+from openpilot.frogpilot.controls.lib.saved_speed_limits import distance as saved_speed_limits_distance
+from openpilot.frogpilot.controls.lib.saved_speed_limits import heading_difference as saved_speed_limits_heading_difference
+
+GPS_LATCH_MAX_DISTANCE = 8000  # m (5 miles): a GPS-spot limit ends after this far, like an unrepeated sign
+GPS_LATCH_MAX_TURN = 60        # degrees off the spot's heading ends it (turned onto another road)
 
 MAPBOX_REQUEST_INTERVAL = 5
 MAPBOX_RETRY_DELAY = 10
@@ -59,6 +64,7 @@ class SpeedLimitController:
     self.next_speed_limit = 0
     self.overridden_speed = 0
     self.saved_speed_limit = 0
+    self.gps_latch = None  # GPS-spot limit in effect: {key, bearing, latitude, longitude where it started}
     self.speed_limit_changed_timer = 0
     self.target = 0
     self.unconfirmed_speed_limit = 0
@@ -101,6 +107,7 @@ class SpeedLimitController:
     self.next_speed_limit = 0
     self.overridden_speed = 0
     self.saved_speed_limit = 0
+    self.gps_latch = None
     self.speed_limit_changed_timer = 0
     self.target = 0
     self.unconfirmed_speed_limit = 0
@@ -188,6 +195,7 @@ class SpeedLimitController:
       self.overridden_speed = 0
 
     self.update_map_speed_limit(map_match, v_ego)
+    self.update_saved_speed_limit(gps_position, map_match, v_ego)
 
     limits = {
       frogpilot_variables.SPEED_LIMIT_SOURCES["CAMERA"]: sm["frogpilotSignReading"].speedLimit if sm.alive["frogpilotSignReading"] else 0,
@@ -409,34 +417,67 @@ class SpeedLimitController:
 
     frogpilot_variables.params.put_nonblocking("MapBoxRequests", json.dumps(self.mapbox_requests))
 
-  def update_saved_speed_limit(self, map_match, v_ego):
+  def update_gps_latch(self, gps_position):
+    """Saved GPS spots act like posted signs: passing one (same direction) switches its limit on, and it stays on
+    until another spot is passed, the car turns off that heading, or it has driven GPS_LATCH_MAX_DISTANCE."""
     saved_speed_limits = self.frogpilot_planner.saved_speed_limits
 
-    if not map_match:
-      self.saved_speed_limit = 0
+    if self.gps_latch is not None and self.gps_latch["key"] not in saved_speed_limits.entries:
+      self.gps_latch = None  # removed in The Pond, or cleared from the picker
+
+    if not gps_position:
+      return  # keep it through a short GPS dropout (tunnels); the checks below resume when GPS is back
+
+    latitude, longitude = gps_position["latitude"], gps_position["longitude"]
+    bearing = gps_position["bearing"] % 360
+
+    found = saved_speed_limits.find_spot(latitude, longitude, bearing)
+    if found is not None and (self.gps_latch is None or found[0] != self.gps_latch["key"]):
+      key, entry = found
+      self.gps_latch = {"bearing": entry["bearing"], "key": key, "latitude": latitude, "longitude": longitude}
+
+    if self.gps_latch is None:
       return
 
-    self.saved_speed_limit = saved_speed_limits.get(map_match["way_id"], map_match["is_forward"])
+    travelled = saved_speed_limits_distance(self.gps_latch["latitude"], self.gps_latch["longitude"], latitude, longitude)
+    turned = saved_speed_limits_heading_difference(bearing, self.gps_latch["bearing"]) > GPS_LATCH_MAX_TURN
+    if turned or travelled > GPS_LATCH_MAX_DISTANCE:
+      self.gps_latch = None
 
-    # Switch to a saved limit on the next road segment early, using the same lookahead as map limits
-    for upcoming in map_match.get("next_speed_limits", []):
-      upcoming_limit = saved_speed_limits.get(upcoming["way_id"], upcoming["is_forward"])
-      if upcoming_limit <= 0 or abs(upcoming_limit - self.saved_speed_limit) < 1:
-        continue
+  def update_saved_speed_limit(self, gps_position, map_match, v_ego):
+    saved_speed_limits = self.frogpilot_planner.saved_speed_limits
 
-      if upcoming_limit > self.saved_speed_limit:
-        lookahead = self.frogpilot_toggles.map_speed_lookahead_higher
-      else:
-        lookahead = self.frogpilot_toggles.map_speed_lookahead_lower
+    self.update_gps_latch(gps_position)
 
-      if upcoming["distance"] < lookahead * v_ego:
-        self.saved_speed_limit = upcoming_limit
-      break
+    road_limit = 0
+    if map_match:
+      road_limit = saved_speed_limits.get(map_match["way_id"], map_match["is_forward"])
+
+      # Switch to a saved limit on the next road segment early, using the same lookahead as map limits
+      for upcoming in map_match.get("next_speed_limits", []):
+        upcoming_limit = saved_speed_limits.get(upcoming["way_id"], upcoming["is_forward"])
+        if upcoming_limit <= 0 or abs(upcoming_limit - road_limit) < 1:
+          continue
+
+        if upcoming_limit > road_limit:
+          lookahead = self.frogpilot_toggles.map_speed_lookahead_higher
+        else:
+          lookahead = self.frogpilot_toggles.map_speed_lookahead_lower
+
+        if upcoming["distance"] < lookahead * v_ego:
+          road_limit = upcoming_limit
+        break
+
+    # A limit saved for the road wins; otherwise a GPS spot that's in effect
+    if road_limit > 0:
+      self.saved_speed_limit = road_limit
+    elif self.gps_latch is not None:
+      self.saved_speed_limit = saved_speed_limits.entries[self.gps_latch["key"]]["speed_limit"]
+    else:
+      self.saved_speed_limit = 0
 
   def update_map_speed_limit(self, map_match, v_ego):
     speed_limit_filler = self.frogpilot_planner.speed_limit_filler
-
-    self.update_saved_speed_limit(map_match, v_ego)
 
     if not map_match:
       self.map_speed_limit = 0
