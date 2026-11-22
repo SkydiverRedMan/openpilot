@@ -71,6 +71,7 @@ const POND = [
   { page: "software", title: "Check for updates", target: '[data-act="check-update"]', words: "check update new version" },
   { page: "software", title: "Install the update", target: '[data-act="install-update"], [data-act="download-update"]', words: "install download update upgrade" },
   { page: "software", title: "Switch branch", target: "section:has([data-branch])", words: "branch channel release staging testing development switch" },
+  { page: "theme_picker", words: "pick choose switch theme now change look sounds wheel quick" },
   { page: "speed_limits", words: "saved speed limits my limit wrong sign correct fix override road" },
   { page: "speed_limits", title: "Back up speed limits", target: '[data-act="speed-limit-export"]', words: "backup export download save speed limits learned" },
   { page: "speed_limits", title: "Restore speed limits", target: '[data-act="speed-limit-import"]', words: "restore import upload speed limits learned" },

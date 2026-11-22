@@ -17,7 +17,7 @@ from openpilot.system.hardware import HARDWARE, PC
 
 from openpilot.frogpilot.common import frogpilot_paths, frogpilot_utilities, frogpilot_variables
 from openpilot.frogpilot.system.the_pond import (backups, dashcam, device, discovery, doors, home, keys, maps, models, navigation, saved_speed_limits,
-                                                 screen_recordings, search, software, tailscale, theme_maker, themes, toggles, tools, utilities, vehicle)
+                                                 screen_recordings, search, software, tailscale, theme_maker, theme_picker, themes, toggles, tools, utilities, vehicle)
 
 API_VERSION = 1
 
@@ -290,6 +290,7 @@ def create_app():
   app.add_routes(software.routes)
   app.add_routes(tailscale.routes)
   app.add_routes(theme_maker.routes)
+  app.add_routes(theme_picker.routes)
   app.add_routes(themes.routes)
   app.add_routes(toggles.routes)
   app.add_routes(tools.routes)

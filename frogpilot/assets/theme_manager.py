@@ -44,6 +44,59 @@ def save_theme_cycle(cycle, path=None):
   temp.replace(path)
 
 
+# "Switch to this theme now" requests from The Pond's theme picker and the parked long-press on the wheel button.
+# A one-line file in memory (cleared at every boot); frogpilot_process applies it within a moment.
+THEME_REQUEST_PATH = Path("/dev/shm/keith_theme_request")
+
+
+def request_theme(key, path=None):
+  path = Path(path or THEME_REQUEST_PATH)
+  temp = path.with_name(path.name + ".tmp")
+  temp.write_text(key)
+  temp.replace(path)
+
+
+def take_theme_request(path=None):
+  path = Path(path or THEME_REQUEST_PATH)
+  try:
+    key = path.read_text().strip()
+  except OSError:
+    return None
+  path.unlink(missing_ok=True)
+  return key or None
+
+
+def picked_theme_mappings(key, theme_wheels):
+  """Every part of one theme. "<name>-animated" keys use the base theme's colors, sounds and signals."""
+  base = key.removesuffix("-animated")
+  wheel = KEITH_WHEEL
+  if theme_wheels:
+    names = {p.stem for p in frogpilot_paths.STEERING_WHEELS_PATH.glob("*") if p.is_file()}
+    wheel = key if key in names else base if base in names else KEITH_WHEEL
+  return {
+    "color_scheme": ("colors", base),
+    "distance_icons": ("distance_icons", key if (frogpilot_paths.THEME_PACKS_PATH / key / "distance_icons").is_dir() else base),
+    "icon_pack": ("icons", key),
+    "sound_pack": ("sounds", base),
+    "turn_signal_pack": ("signals", base),
+    "wheel_image": ("wheel_image", wheel),
+  }
+
+
+def move_cycle_to(key, path=None):
+  """A theme picked by hand becomes the cycle's current theme, so the next boot continues after it."""
+  cycle = load_theme_cycle(path)
+  if cycle is None or key not in cycle["order"]:
+    return
+  index = cycle["order"].index(key)
+  cycle["current"] = key
+  cycle["next"] = (index + 1) % len(cycle["order"])
+  try:
+    save_theme_cycle(cycle, path)
+  except OSError:
+    pass
+
+
 def cycle_theme(advance, path=None, packs_path=None):
   """The cycle's theme: the next one when advance (boot), otherwise the current one. None when the cycle is off."""
   cycle = load_theme_cycle(path)
@@ -76,6 +129,8 @@ class ThemeManager:
     self.download_state = frogpilot_download_utilities.DownloadState()
 
     self.theme_updated = False
+
+    self.picked_theme = None  # chosen in the theme picker; kept until the next boot
 
     self.download_count = 0
     self.download_failed_count = 0
@@ -478,6 +533,15 @@ class ThemeManager:
       return f"{name}~{creator}"
     return name
 
+  def apply_picked_theme(self, key, time_validated, frogpilot_toggles):
+    """Switch every part of the active theme to key right away. Returns False for a theme that isn't installed."""
+    if key not in self.get_full_themes():
+      return False
+    self.picked_theme = key
+    move_cycle_to(key)
+    self.update_active_theme(time_validated, frogpilot_toggles)
+    return True
+
   def update_active_theme(self, time_validated, frogpilot_toggles, boot_run=False, randomize_theme=False):
     previous_holiday_theme = self.holiday_theme
 
@@ -500,6 +564,9 @@ class ThemeManager:
         "turn_signal_pack": ("signals", self.holiday_theme),
         "wheel_image": ("wheel_image", self.holiday_theme)
       }
+    elif self.picked_theme is not None and not boot_run:
+      # Picked by hand: stays through drive ends and settings changes until the next boot
+      asset_mappings = picked_theme_mappings(self.picked_theme, theme_wheels=load_theme_cycle() is not None)
     elif (boot_run or randomize_theme) and frogpilot_toggles.random_themes and (cycle_key := cycle_theme(advance=boot_run)):
       asset_mappings = {
         "color_scheme": ("colors", cycle_key),
