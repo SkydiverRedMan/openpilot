@@ -57,9 +57,11 @@ for line in sys.stdin:
     print(path)
 ' "$WORK/quick_prepare_release.py")"
 
-export GIT_INDEX_FILE="$WORK/quick_index"
-rm -f "$GIT_INDEX_FILE"
-git read-tree "$BASE"
+# Build the new tree by rewriting only the folders on the changed paths (git mktree). The clone is blobless and the
+# comma's git (2.25) has no way to stop lazy fetches, so anything that touches every file (read-tree, write-tree)
+# fetches thousands of files one by one and runs out of file handles (found 2026-11-22).
+EDITS="$WORK/quick_edits"
+: > "$EDITS"
 while IFS=$'\t' read -r status path; do
   [ -n "$path" ] || continue
   if ! echo "$SHIPPED" | grep -qxF "$path"; then
@@ -67,23 +69,68 @@ while IFS=$'\t' read -r status path; do
     continue
   fi
   if [ "$status" = "D" ]; then
-    git update-index --force-remove "$path"
+    printf 'D\t-\t%s\n' "$path" >> "$EDITS"
     log "  remove: $path"
     continue
   fi
   # The release must still hold the file exactly as the old source had it, or the release was changed some other way
-  if git cat-file -e "$OLD_SOURCE:$path" 2>/dev/null && [ "$(git rev-parse "$BASE:$path" 2>/dev/null)" != "$(git rev-parse "$OLD_SOURCE:$path")" ]; then
+  OLD_BLOB="$(git rev-parse -q --verify "$OLD_SOURCE:$path" 2>/dev/null || true)"
+  if [ -n "$OLD_BLOB" ] && [ "$(git rev-parse -q --verify "$BASE:$path" 2>/dev/null || true)" != "$OLD_BLOB" ]; then
     log "$path in $RELEASE_BRANCH differs from its source; use build_on_device.sh"
     exit 1
   fi
   MODE="$(git ls-tree "$NEW_SOURCE" -- "$path" | cut -d' ' -f1)"
   [ "$MODE" != "120000" ] || { log "$path is a symlink; use build_on_device.sh"; exit 1; }
-  git update-index --add --cacheinfo "$MODE,$(git rev-parse "$NEW_SOURCE:$path"),$path"
+  printf '%s\t%s\t%s\n' "$MODE" "$(git rev-parse "$NEW_SOURCE:$path")" "$path" >> "$EDITS"
   log "  update: $path"
 done <<< "$CHANGES"
-TREE="$(git write-tree)"
-rm -f "$GIT_INDEX_FILE"
-unset GIT_INDEX_FILE
+
+TREE="$(python3 - "$(git rev-parse "$BASE^{tree}")" "$EDITS" <<'PYEOF'
+import subprocess, sys
+
+def git(*args, data=None):
+  return subprocess.run(["git", *args], input=data, check=True, stdout=subprocess.PIPE, text=True).stdout
+
+def read_tree(sha):
+  entries = {}
+  if sha:
+    for line in git("ls-tree", sha).splitlines():
+      meta, name = line.split("\t", 1)
+      mode, kind, obj = meta.split(" ")
+      entries[name] = (mode, kind, obj)
+  return entries
+
+def apply(tree_sha, edits):
+  """edits: {relative path: (mode, sha) or None to delete}. Returns the new tree's sha, or None when empty."""
+  entries = read_tree(tree_sha)
+  sub = {}
+  for path, change in edits.items():
+    head, _, rest = path.partition("/")
+    if rest:
+      sub.setdefault(head, {})[rest] = change
+    elif change is None:
+      entries.pop(head, None)
+    else:
+      entries[head] = (change[0], "blob", change[1])
+  for name, changes in sub.items():
+    current = entries.get(name)
+    new = apply(current[2] if current and current[1] == "tree" else None, changes)
+    if new is None:
+      entries.pop(name, None)
+    else:
+      entries[name] = ("040000", "tree", new)
+  if not entries:
+    return None
+  lines = "".join(f"{mode} {kind} {obj}\t{name}\n" for name, (mode, kind, obj) in entries.items())
+  return git("mktree", "--missing", data=lines).strip()
+
+edits = {}
+for line in open(sys.argv[2]):
+  mode, sha, path = line.rstrip("\n").split("\t", 2)
+  edits[path] = None if mode == "D" else (mode, sha)
+print(apply(sys.argv[1], edits))
+PYEOF
+)"
 
 [ "$TREE" != "$(git rev-parse "$BASE^{tree}")" ] || { log "No shipped file changed; nothing to release"; exit 1; }
 

@@ -49,6 +49,11 @@ Personal FrogPilot fork for Keith's comma 3X in a Toyota Highlander. Never push 
   `comma-521986ac`). `192.168.68.114` is the Mac.
 * **No compile needed ≠ no release needed.** The comma only installs prebuilt `na2` commits. A Python-only change
   still needs a release, but the quick script makes it without recompiling (first done by hand: `33e5b3f`).
+* **Quick release, first scripted run (2026-11-22, `fe96284`):** the comma's git (2.25) can't stop lazy fetches in the
+  blobless clone, so `read-tree`/`write-tree` fetched every file and hit "Too many open files". The script now rebuilds
+  only the changed folders with `git mktree --missing`; it then took under a minute. Large copies didn't stall that day.
+* **Offline maps decide where saved limits work by road.** Only NY/PA/NJ/MA/TX (+CA) are downloaded; elsewhere saves
+  are GPS spots (since 2026-11-22). Comma address that day: `192.168.68.59`.
 * **This PC has no Docker.** Tests ran in a venv instead (`pytest numpy pycapnp==2.0.0 aiohttp`) with a directory
   junction named `openpilot` pointing at the repo on `PYTHONPATH`; see `docs/saved-speed-limits.md`.
 
@@ -67,4 +72,4 @@ Details: `docs/navigation-assist/DEPLOYMENT.md`. Status of milestones: `docs/nav
   account, then on the comma re-add the GitHub username under SSH Keys so it fetches the new key.
 * Docker Desktop is only needed for the PC build/render checks (`Dockerfile.openpilot_base`); unit tests also run in
   `python:3.11-slim` with `pytest` and `pycapnp==2.0.0`.
-* Last known comma address: `192.168.68.105` (2026-11-18; it changes) (check FrogPilot → Navigation → "Manage Your Settings At").
+* Last known comma address: `192.168.68.59` (2026-11-22; it changes) (check FrogPilot → Navigation → "Manage Your Settings At").
