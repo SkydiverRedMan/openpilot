@@ -19,6 +19,9 @@ Personal FrogPilot fork for Keith's comma 3X in a Toyota Highlander. Never push 
 * Keep Keith's customizations: paramotor boot logo and steering wheel, custom startup/engage sounds, Highlander BSM
   (`selfdrive/car/toyota/interface.py`, `opendbc/toyota_tnga_k_pt_generated.dbc`), his default settings, and saved speed
   limits (`docs/saved-speed-limits.md`; data in `/data/saved_speed_limits.json`, never delete it).
+* Theme test cycle (2026-11-22): `/data/themes/keith_theme_cycle.json` with `"enabled": true` makes each boot show the next
+  theme in its `order` (Keith's 16 themes from SkydiverRedMan/frogpilot-themes), own wheel included; set `enabled` false
+  to go back to Random Themes + paramotor wheel lock (no release needed). Holiday Themes was turned off for the test.
 * Navigation Assist is advisory only: it must never publish anything controls, planners, models or lane-change code
   read, never steer/signal/change speed. See `docs/navigation-assist/`.
 * Install branches stay lean: tests and notes are kept out of `na2` by `release/prepare_release.py`.
