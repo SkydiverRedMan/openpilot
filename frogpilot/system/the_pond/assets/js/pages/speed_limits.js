@@ -29,10 +29,11 @@ function mapLink(row) {
 }
 
 function limitRow(row, data) {
-  const name = row.road_name ? P.esc(row.road_name) : "Unnamed road";
+  const place = row.kind === "gps" ? `GPS spot, heading ${row.heading}` : "";
+  const name = row.road_name ? P.esc(row.road_name) : (place || "Unnamed road");
   const when = savedDate(row.saved);
   return `<div class="list-row">
-    <span class="grow"><b>${name}</b><span class="muted">${when ? `Saved ${when}` : "Saved"}${mapLink(row)}</span></span>
+    <span class="grow"><b>${name}</b><span class="muted">${row.kind === "gps" && row.road_name ? `${place} · ` : ""}${when ? `Saved ${when}` : "Saved"}${mapLink(row)}</span></span>
     <span class="acts">
       <span class="num"><b>${row.speed_limit}</b> ${unit(data)}</span>
       <button class="btn btn-quiet btn-small" data-act="speed-limit-edit" data-key="${row.key}" data-value="${row.speed_limit}" data-name="${name}">Change…</button>

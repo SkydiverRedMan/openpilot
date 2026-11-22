@@ -21,10 +21,16 @@ then on, ahead of the camera, map, navigation and every priority setting.
 
 ## How it works
 
-* A saved limit belongs to one map road segment (OSM way) in one direction, the same key FrogPilot's learned limits
-  use. Long roads are split into several segments in the map, so a road may need saving in a few places, and each
-  direction separately. Saving needs a GPS fix and downloaded offline maps for the area; otherwise the alert says
-  "Couldn't save the speed limit".
+* With offline maps for the area, a saved limit belongs to one map road segment (OSM way) in one direction, the same
+  key FrogPilot's learned limits use. Long roads are split into several segments in the map, so a road may need saving
+  in a few places, and each direction separately.
+* **Without offline maps (added 2026-11-22):** the limit is pinned to the GPS spot and heading where it was saved
+  ("GPS spot" in The Pond). It takes effect at once, and again whenever the car passes within 40 m of the spot heading
+  the same way (within 35°). Like a posted sign it then stays on until the car passes another saved spot, turns more
+  than 60° off that heading, or has gone 8 km (5 mi). A road-based saved limit wins over a spot where both apply.
+  Saving at the same place and direction replaces the old spot. **Clear** removes the spot in effect.
+  Found on the NY→TX trip: offline maps were only downloaded for NY/PA/NJ/MA/TX (+CA), so saving failed in Indiana.
+* Saving now only fails with no GPS fix; the alert then says "Couldn't save the speed limit — No GPS fix right now".
 * A saved limit on the next segment takes over early, using the same lookahead as map limits.
 * Offsets still apply on top of a saved limit, and it needs no confirmation even with confirmation turned on.
 * Files: `/data/saved_speed_limits.json` with a copy at `/data/media/0/saved_speed_limits_backup.json`. Both are outside

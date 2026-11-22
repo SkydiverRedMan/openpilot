@@ -2,14 +2,22 @@
 """Speed limits the driver saved by hand (tap the sign on the driving screen, or The Pond).
 
 Kept in /data/saved_speed_limits.json, outside /data/openpilot, so installing an update never removes them, with a second
-copy in /data/media/0 in case the first is ever damaged. Each entry belongs to one map road segment (OSM way) in one
-direction, the same key FrogPilot's speed limit filler uses. Saved limits are never uploaded anywhere.
+copy in /data/media/0 in case the first is ever damaged. Saved limits are never uploaded anywhere.
+
+Two kinds of entry:
+* Road: one map road segment (OSM way) in one direction, the same key FrogPilot's speed limit filler uses. Needs the
+  offline maps for the area.
+* GPS spot ("kind": "gps"): where there's no offline map, the limit is pinned to the spot and heading where it was saved.
+  Driving past the spot in that direction switches the limit on; the speed limit controller keeps it on like a posted
+  sign (see SpeedLimitController.update_gps_latch).
 
 Both the planner (frogpilot_process) and The Pond write this file, so every change re-reads the file under a lock first.
 """
 import datetime
 import json
+import math
 import os
+import re
 import threading
 import time
 
@@ -34,9 +42,20 @@ MAX_ROAD_NAME_LENGTH = 100
 
 RELOAD_INTERVAL = 1.0
 
+GPS_KIND = "gps"
+SPOT_RADIUS = 40.0             # m: passing within this distance of a spot counts as passing it
+SPOT_HEADING_TOLERANCE = 35.0  # degrees: and heading the same way
+SPOT_KEY_PATTERN = re.compile(r"^gps_-?\d{1,2}\.\d{5}_-?\d{1,3}\.\d{5}_\d{1,3}$")
+
+EARTH_RADIUS = 6371000.0
+
 
 def way_key(way_id, is_forward):
   return f"{int(way_id)}_{int(bool(is_forward))}"
+
+
+def spot_key(latitude, longitude, bearing):
+  return f"gps_{latitude:.5f}_{longitude:.5f}_{int(round(bearing)) % 360}"
 
 
 def parse_way_key(key):
@@ -46,25 +65,69 @@ def parse_way_key(key):
   return int(way_id), direction == "1"
 
 
+def is_valid_key(key):
+  """A road key ('123_1') or a GPS spot key ('gps_40.12345_-75.12345_270')."""
+  if SPOT_KEY_PATTERN.match(str(key)):
+    return True
+  try:
+    parse_way_key(key)
+  except ValueError:
+    return False
+  return True
+
+
+def entry_key(entry):
+  if entry.get("kind") == GPS_KIND:
+    return spot_key(entry["latitude"], entry["longitude"], entry["bearing"])
+  return way_key(entry["way_id"], entry["is_forward"])
+
+
+def heading_difference(a, b):
+  return abs((a - b + 180) % 360 - 180)
+
+
+def distance(latitude1, longitude1, latitude2, longitude2):
+  """Meters between two nearby points (equirectangular, plenty for tens of km)."""
+  x = math.radians(longitude2 - longitude1) * math.cos(math.radians((latitude1 + latitude2) / 2))
+  y = math.radians(latitude2 - latitude1)
+  return EARTH_RADIUS * math.hypot(x, y)
+
+
+def _number(value):
+  return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
 def normalize_entry(entry):
   """Return a clean copy of one saved limit, or None if it isn't valid."""
   if not isinstance(entry, dict):
     return None
 
-  way_id = entry.get("way_id")
-  is_forward = entry.get("is_forward")
   speed_limit = entry.get("speed_limit")
-
-  if isinstance(way_id, bool) or not isinstance(way_id, int) or way_id <= 0:
-    return None
-  if not isinstance(is_forward, bool):
-    return None
-  if isinstance(speed_limit, bool) or not isinstance(speed_limit, (int, float)):
-    return None
-  if not MIN_SPEED_LIMIT <= speed_limit <= MAX_SPEED_LIMIT:
+  if not _number(speed_limit) or not MIN_SPEED_LIMIT <= speed_limit <= MAX_SPEED_LIMIT:
     return None
 
-  clean = {"is_forward": is_forward, "speed_limit": float(speed_limit), "way_id": way_id}
+  if entry.get("kind") == GPS_KIND:
+    latitude, longitude, bearing = entry.get("latitude"), entry.get("longitude"), entry.get("bearing")
+    if not (_number(latitude) and _number(longitude) and _number(bearing)):
+      return None
+    if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
+      return None
+    clean = {"bearing": round(float(bearing) % 360, 1), "kind": GPS_KIND, "latitude": round(float(latitude), 6),
+             "longitude": round(float(longitude), 6), "speed_limit": float(speed_limit)}
+  else:
+    way_id = entry.get("way_id")
+    is_forward = entry.get("is_forward")
+    if isinstance(way_id, bool) or not isinstance(way_id, int) or way_id <= 0:
+      return None
+    if not isinstance(is_forward, bool):
+      return None
+
+    clean = {"is_forward": is_forward, "speed_limit": float(speed_limit), "way_id": way_id}
+
+    for field, bound in (("latitude", 90), ("longitude", 180)):
+      value = entry.get(field)
+      if _number(value) and -bound <= value <= bound:
+        clean[field] = round(float(value), 6)
 
   road_name = entry.get("road_name")
   if isinstance(road_name, str) and road_name.strip():
@@ -73,11 +136,6 @@ def normalize_entry(entry):
   saved = entry.get("saved")
   if isinstance(saved, str) and len(saved) <= 40:
     clean["saved"] = saved
-
-  for field, bound in (("latitude", 90), ("longitude", 180)):
-    value = entry.get(field)
-    if isinstance(value, (int, float)) and not isinstance(value, bool) and -bound <= value <= bound:
-      clean[field] = round(float(value), 6)
 
   return clean
 
@@ -90,7 +148,7 @@ def entries_from_data(data):
   for entry in data.get("speed_limits", []) if isinstance(data.get("speed_limits"), list) else []:
     clean = normalize_entry(entry)
     if clean is not None:
-      entries[way_key(clean["way_id"], clean["is_forward"])] = clean
+      entries[entry_key(clean)] = clean
   return entries
 
 
@@ -133,7 +191,7 @@ def write_entries(entries, path=None, backup_path=None):
   path = Path(path or frogpilot_paths.SAVED_SPEED_LIMITS_PATH)
   backup_path = Path(backup_path or frogpilot_paths.SAVED_SPEED_LIMITS_BACKUP_PATH)
 
-  ordered = sorted(entries.values(), key=lambda entry: (entry["way_id"], entry["is_forward"]))
+  ordered = [entries[key] for key in sorted(entries)]
   text = json.dumps({"schema_version": SCHEMA_VERSION, "speed_limits": ordered}, separators=(",", ":"))
 
   _write_atomic(path, text)
@@ -175,6 +233,20 @@ def now_stamp():
   return datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def spots_near(entries, latitude, longitude, bearing, radius=SPOT_RADIUS, tolerance=SPOT_HEADING_TOLERANCE):
+  """Keys of GPS spots within radius of the point, facing within tolerance of the bearing, nearest first."""
+  found = []
+  for key, entry in entries.items():
+    if entry.get("kind") != GPS_KIND or abs(entry["latitude"] - latitude) > 0.01:
+      continue
+    if heading_difference(entry["bearing"], bearing) > tolerance:
+      continue
+    meters = distance(latitude, longitude, entry["latitude"], entry["longitude"])
+    if meters <= radius:
+      found.append((meters, key))
+  return [key for _, key in sorted(found)]
+
+
 class SavedSpeedLimits:
   """In-memory view for the planner. Reloads when The Pond changes the file; saves on a background thread."""
 
@@ -188,6 +260,10 @@ class SavedSpeedLimits:
     self.last_check = clock()
 
     self.write_lock = threading.Lock()
+
+    self._spot_version = None
+    self._spot_cells = {}
+    self.version = 0
 
   def _stamp(self):
     try:
@@ -206,10 +282,37 @@ class SavedSpeedLimits:
     if stamp != self.file_stamp:
       self.file_stamp = stamp
       self.entries = read_entries(self.path, self.backup_path)
+      self.version += 1
 
   def get(self, way_id, is_forward):
     entry = self.entries.get(way_key(way_id, is_forward))
     return entry["speed_limit"] if entry else 0
+
+  def _cells(self):
+    """GPS spots grouped by ~1 km cell, rebuilt only when the entries change (this runs 20 times a second)."""
+    if self._spot_version != self.version:
+      cells = {}
+      for key, entry in self.entries.items():
+        if entry.get("kind") == GPS_KIND:
+          cells.setdefault((round(entry["latitude"] * 100), round(entry["longitude"] * 100)), {})[key] = entry
+      self._spot_cells = cells
+      self._spot_version = self.version
+    return self._spot_cells
+
+  def find_spot(self, latitude, longitude, bearing):
+    """(key, entry) of the nearest saved GPS spot being passed in the same direction, or None."""
+    cells = self._cells()
+    if not cells:
+      return None
+
+    row, column = round(latitude * 100), round(longitude * 100)
+    nearby = {}
+    for d_row in (-1, 0, 1):
+      for d_column in (-1, 0, 1):
+        nearby.update(cells.get((row + d_row, column + d_column), {}))
+
+    keys = spots_near(nearby, latitude, longitude, bearing)
+    return (keys[0], nearby[keys[0]]) if keys else None
 
   def _write(self, change):
     with self.write_lock:
@@ -221,6 +324,7 @@ class SavedSpeedLimits:
 
   def _apply(self, change, background):
     change(self.entries)
+    self.version += 1
     if background:
       threading.Thread(target=self._write, args=(change,), daemon=True).start()
     else:
@@ -247,8 +351,37 @@ class SavedSpeedLimits:
     self._apply(change, background)
     return True
 
+  def save_spot(self, latitude, longitude, bearing, speed_limit, road_name="", background=True):
+    """Pin a limit to a GPS spot and heading. Replaces any spot already saved there for the same direction.
+
+    Returns the new spot's key, or None if the values aren't valid.
+    """
+    entry = normalize_entry({
+      "bearing": bearing,
+      "kind": GPS_KIND,
+      "latitude": latitude,
+      "longitude": longitude,
+      "road_name": road_name,
+      "saved": now_stamp(),
+      "speed_limit": speed_limit,
+    })
+    if entry is None:
+      return None
+
+    key = entry_key(entry)
+
+    def change(entries):
+      for old in spots_near(entries, entry["latitude"], entry["longitude"], entry["bearing"]):
+        entries.pop(old, None)
+      entries[key] = entry
+
+    self._apply(change, background)
+    return key
+
   def remove(self, way_id, is_forward, background=True):
-    key = way_key(way_id, is_forward)
+    return self.remove_key(way_key(way_id, is_forward), background)
+
+  def remove_key(self, key, background=True):
     if key not in self.entries:
       return False
 

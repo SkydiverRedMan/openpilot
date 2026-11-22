@@ -189,9 +189,13 @@ class FakeFiller:
 class FakeSaved:
   def __init__(self, limits=None):
     self.limits = limits or {}
+    self.entries = {}
 
   def get(self, way_id, is_forward):
     return self.limits.get((way_id, is_forward), 0)
+
+  def find_spot(self, latitude, longitude, bearing):
+    return None
 
 
 class FakeSM(dict):
@@ -206,8 +210,9 @@ class FakeSM(dict):
     self.alive = {"frogpilotSignReading": True}
 
 
-def make_slc(slc_module, saved=None, **toggles):
-  planner = SimpleNamespace(speed_limit_filler=FakeFiller(), saved_speed_limits=FakeSaved(saved), accel_pressed=False, decel_pressed=False,
+def make_slc(slc_module, saved=None, store_object=None, **toggles):
+  saved_speed_limits = store_object if store_object is not None else FakeSaved(saved)
+  planner = SimpleNamespace(speed_limit_filler=FakeFiller(), saved_speed_limits=saved_speed_limits, accel_pressed=False, decel_pressed=False,
                             experimental_mode_pressed=False)
   slc = slc_module.SpeedLimitController(SimpleNamespace(frogpilot_planner=planner))
   slc.frogpilot_toggles = SimpleNamespace(**{
@@ -309,7 +314,8 @@ def test_planner_saves_clears_and_fails(monkeypatch, store):
   Planner = load_planner_handler(monkeypatch)
   planner = Planner()
   planner.saved_speed_limits = store.SavedSpeedLimits()
-  gps = {"latitude": 40.0, "longitude": -75.0}
+  planner.frogpilot_vcruise = SimpleNamespace(slc=SimpleNamespace(gps_latch=None))
+  gps = {"latitude": 40.0, "longitude": -75.0, "bearing": 90.0}
 
   planner.saved_speed_limit_request = 45 * MPH
   planner.handle_saved_speed_limit_request(gps, map_match())
@@ -460,7 +466,7 @@ def test_pond_list_edit_remove(pond):
 
   status, data, _ = pond.call("GET", "/api/saved_speed_limits")
   assert status == 200 and data["metric"] is False
-  assert data["speed_limits"] == [{"key": "100_1", "latitude": None, "longitude": None, "road_name": "Main Street",
+  assert data["speed_limits"] == [{"heading": None, "key": "100_1", "kind": "road", "latitude": None, "longitude": None, "road_name": "Main Street",
                                    "saved": data["speed_limits"][0]["saved"], "speed_limit": 45}]
 
   status, _, _ = pond.call("PUT", "/api/saved_speed_limits/100_1", {"speed_limit": 40})
@@ -528,3 +534,141 @@ def test_pond_restore_skips_learned_while_driving(pond):
 
 def test_pond_rejects_other_files(pond):
   assert pond.call("POST", "/api/saved_speed_limits/import", {"hello": 1})[0] == 400
+
+
+# ---------- GPS spots (no offline map) ----------
+
+# At 40 degrees north one degree of longitude is about 85.3 km
+LON_PER_KM = 1 / 85.3
+
+
+def gps(latitude=40.0, longitude=-85.0, bearing=90.0):
+  return {"latitude": latitude, "longitude": longitude, "bearing": bearing, "location_mono_time": 0}
+
+
+def test_spot_save_find_and_replace(store):
+  limits = store.SavedSpeedLimits()
+  key = limits.save_spot(40.0, -85.0, 90.0, 70 * MPH, road_name="", background=False)
+  assert key == "gps_40.00000_-85.00000_90" and store.is_valid_key(key)
+
+  assert limits.find_spot(40.0, -85.0 + 0.030 * LON_PER_KM, 95.0)[0] == key  # 30 m on, nearly the same heading
+  assert limits.find_spot(40.0, -85.0, 270.0) is None                         # other direction
+  assert limits.find_spot(40.0, -85.0 + 0.2 * LON_PER_KM, 90.0) is None       # 200 m away
+
+  # Saving again at the same place and direction replaces it
+  new_key = limits.save_spot(40.0, -85.0 + 0.010 * LON_PER_KM, 92.0, 65 * MPH, background=False)
+  spots = [k for k, e in store.read_entries().items() if e.get("kind") == "gps"]
+  assert spots == [new_key]
+
+  # The other direction is a separate spot
+  limits.save_spot(40.0, -85.0, 270.0, 60 * MPH, background=False)
+  assert len([e for e in store.read_entries().values() if e.get("kind") == "gps"]) == 2
+
+  assert not store.is_valid_key("gps_40_-85_90") and not store.is_valid_key("gps_../../etc")
+
+
+def test_spot_entries_survive_reload(store):
+  store.SavedSpeedLimits().save_spot(40.0, -85.0, 90.0, 70 * MPH, background=False)
+  entry = store.SavedSpeedLimits().entries["gps_40.00000_-85.00000_90"]
+  assert entry["kind"] == "gps" and entry["bearing"] == 90.0 and entry["speed_limit"] == pytest.approx(70 * MPH)
+
+
+def run_gps(slc, position, match=None, camera=55 * MPH, v_ego=30.0):
+  slc.update_limits(position, match or {}, None, False, v_ego, FakeSM(camera))
+
+
+def test_spot_limit_stays_on_like_a_sign_then_ends(slc_module, store):
+  limits = store.SavedSpeedLimits()
+  limits.save_spot(40.0, -85.0, 90.0, 70 * MPH, background=False)
+  slc = make_slc(slc_module, store_object=limits)
+
+  run_gps(slc, gps(longitude=-85.0 - 0.5 * LON_PER_KM))  # before the spot: camera
+  assert slc.source == "Camera" and slc.target == pytest.approx(55 * MPH)
+
+  run_gps(slc, gps())                                    # passing the spot
+  assert slc.source == "Saved" and slc.target == pytest.approx(70 * MPH)
+
+  run_gps(slc, gps(longitude=-85.0 + 3 * LON_PER_KM, bearing=110))  # 3 km on, gentle curve: still on
+  assert slc.source == "Saved"
+
+  run_gps(slc, None)                                      # GPS dropout (tunnel): still on
+  assert slc.source == "Saved"
+
+  run_gps(slc, gps(longitude=-85.0 + 9 * LON_PER_KM))   # past 8 km: ends
+  assert slc.source == "Camera" and slc.saved_speed_limit == 0
+
+
+def test_spot_limit_ends_on_a_turn_and_in_the_other_direction(slc_module, store):
+  limits = store.SavedSpeedLimits()
+  limits.save_spot(40.0, -85.0, 90.0, 70 * MPH, background=False)
+  slc = make_slc(slc_module, store_object=limits)
+
+  run_gps(slc, gps())
+  assert slc.source == "Saved"
+  run_gps(slc, gps(longitude=-85.0 + 1 * LON_PER_KM, bearing=180))  # turned south
+  assert slc.source == "Camera"
+
+  slc = make_slc(slc_module, store_object=limits)
+  run_gps(slc, gps(bearing=270))                                     # passing it westbound
+  assert slc.source == "Camera"
+
+
+def test_next_spot_takes_over_and_road_save_wins(slc_module, store):
+  limits = store.SavedSpeedLimits()
+  limits.save_spot(40.0, -85.0, 90.0, 70 * MPH, background=False)
+  limits.save_spot(40.0, -85.0 + 2 * LON_PER_KM, 90.0, 45 * MPH, background=False)
+  limits.save(100, True, 60 * MPH, background=False)
+  slc = make_slc(slc_module, store_object=limits)
+
+  run_gps(slc, gps())
+  assert slc.target == pytest.approx(70 * MPH)
+  run_gps(slc, gps(longitude=-85.0 + 2 * LON_PER_KM))
+  assert slc.target == pytest.approx(45 * MPH)
+
+  run_gps(slc, gps(longitude=-85.0 + 2.5 * LON_PER_KM), match=map_match())  # a mapped road with its own saved limit
+  assert slc.target == pytest.approx(60 * MPH)
+
+
+def test_spot_removed_in_the_pond_stops_applying(slc_module, store):
+  clock = FakeClock()
+  limits = store.SavedSpeedLimits(clock=clock)
+  limits.save_spot(40.0, -85.0, 90.0, 70 * MPH, background=False)
+  slc = make_slc(slc_module, store_object=limits)
+  run_gps(slc, gps())
+  assert slc.source == "Saved"
+
+  store.modify(lambda entries: entries.clear())
+  clock.now += 1.5
+  limits.refresh()
+  run_gps(slc, gps(longitude=-85.0 + 0.5 * LON_PER_KM))
+  assert slc.source == "Camera"
+
+
+def test_planner_saves_a_spot_without_a_map_and_clears_it(monkeypatch, store):
+  Planner = load_planner_handler(monkeypatch)
+  planner = Planner()
+  planner.saved_speed_limits = store.SavedSpeedLimits()
+  slc = SimpleNamespace(gps_latch=None)
+  planner.frogpilot_vcruise = SimpleNamespace(slc=slc)
+
+  planner.saved_speed_limit_request = 70 * MPH
+  planner.handle_saved_speed_limit_request(gps(bearing=-90.0), {})  # no offline map here
+  assert planner.saved_speed_limit_event == "saved"
+  assert slc.gps_latch["key"] == "gps_40.00000_-85.00000_270"         # in effect right away
+  assert planner.saved_speed_limits.entries[slc.gps_latch["key"]]["speed_limit"] == pytest.approx(70 * MPH)
+
+  planner.saved_speed_limit_request = 0.0
+  planner.handle_saved_speed_limit_request(gps(bearing=270.0), {})
+  assert planner.saved_speed_limit_event == "cleared" and slc.gps_latch is None
+  assert planner.saved_speed_limits.entries == {}
+
+
+def test_pond_lists_and_edits_spots(pond):
+  key = pond.store.SavedSpeedLimits().save_spot(40.0, -85.0, 90.0, 70 * MPH, background=False)
+  row = pond.call("GET", "/api/saved_speed_limits")[1]["speed_limits"][0]
+  assert row["kind"] == "gps" and row["heading"] == "east" and row["key"] == key and row["speed_limit"] == 70
+
+  assert pond.call("PUT", f"/api/saved_speed_limits/{key}", {"speed_limit": 65})[0] == 200
+  assert pond.store.read_entries()[key]["speed_limit"] == pytest.approx(65 * MPH)
+  assert pond.call("DELETE", f"/api/saved_speed_limits/{key}")[0] == 204
+  assert pond.store.read_entries() == {}

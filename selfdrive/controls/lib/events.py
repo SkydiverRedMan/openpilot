@@ -404,7 +404,7 @@ def speed_limit_saved_alert(CP: car.CarParams, CS: car.CarState, sm: messaging.S
 
   return Alert(
     title,
-    "Used on this road from now on",
+    "Used here every time you pass",
     FrogPilotAlertStatus.frogpilot, AlertSize.mid,
     Priority.LOW, VisualAlert.none, AudibleAlert.prompt, 3.)
 
@@ -1196,7 +1196,7 @@ FROGPILOT_EVENTS: dict[int, dict[str, Alert | AlertCallbackType]] = {
   FrogPilotEventName.speedLimitSaveFailed: {
     ET.PERMANENT: Alert(
       "Couldn't save the speed limit",
-      "No GPS fix or map data for this road",
+      "No GPS fix right now",
       FrogPilotAlertStatus.frogpilot, AlertSize.mid,
       Priority.LOW, VisualAlert.none, AudibleAlert.prompt, 3.),
   },
