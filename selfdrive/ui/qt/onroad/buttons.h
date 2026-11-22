@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QPushButton>
+#include <QTimer>
 
 #include "selfdrive/ui/ui.h"
 
@@ -29,6 +30,13 @@ private:
   void hideEvent(QHideEvent *event) override;
   void showEvent(QShowEvent *event) override;
   void updateTheme();
+
+  // Keith: long press while parked opens a theme picker; a normal tap still toggles Experimental Mode
+  void showThemePicker();
+
+  QTimer *long_press_timer;
+  bool long_press_fired = false;
+  bool parked = false;
 
   bool wheel_is_stock = false;
 

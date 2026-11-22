@@ -10,7 +10,7 @@ from openpilot.common.realtime import DT_MDL, Priority, set_realtime_priority
 from openpilot.common.time import system_time_valid
 
 from openpilot.frogpilot.system.model_manager import ModelManager
-from openpilot.frogpilot.assets.theme_manager import ThemeManager
+from openpilot.frogpilot.assets.theme_manager import THEME_REQUEST_PATH, ThemeManager, take_theme_request
 from openpilot.frogpilot.common.frogpilot_api import FrogPilotAPI
 from openpilot.frogpilot.selfdrive.car.toyota.door_control import lock_doors, send_door_command
 from openpilot.frogpilot.selfdrive.navd.map_scheduler import update_maps
@@ -371,6 +371,12 @@ def frogpilot_thread():
 
       if time_validated:
         frogpilot_utilities.run_thread_with_lock("send_stats", send_stats, (frogpilot_variables.params, frogpilot_toggles, frogpilot_api))
+
+    if THEME_REQUEST_PATH.exists():
+      # Keith's theme picker (The Pond, or a long press on the wheel button while parked)
+      picked = take_theme_request()
+      if picked:
+        theme_manager.apply_picked_theme(picked, time_validated, variables.frogpilot_toggles)
 
     if model_manager.models_updated or theme_manager.theme_updated:
       update_toggles(variables, started, model_manager, theme_manager, time_validated)

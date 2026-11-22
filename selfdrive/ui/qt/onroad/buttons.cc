@@ -1,9 +1,13 @@
 #include "selfdrive/ui/qt/onroad/buttons.h"
 
+#include <QDir>
+#include <QFile>
 #include <QFileInfo>
+#include <QMap>
 #include <QPainter>
 
 #include "selfdrive/ui/qt/util.h"
+#include "selfdrive/ui/qt/widgets/input.h"
 
 void drawIcon(QPainter &p, const QPoint &center, const QPixmap &img, const QBrush &bg, float opacity) {
   p.setRenderHint(QPainter::Antialiasing);
@@ -22,10 +26,85 @@ ExperimentalButton::ExperimentalButton(QWidget *parent) : experimental_mode(fals
 
   engage_img = loadPixmap("../assets/img_chffr_wheel.png", {img_size, img_size});
   experimental_img = loadPixmap("../assets/img_experimental.svg", {img_size, img_size});
-  QObject::connect(this, &QPushButton::clicked, this, &ExperimentalButton::changeMode);
+  QObject::connect(this, &QPushButton::clicked, this, [this]() {
+    if (long_press_fired) {
+      long_press_fired = false;  // the press opened the theme picker; don't also toggle Experimental Mode
+      return;
+    }
+    changeMode();
+  });
 
   // FrogPilot variables
   QObject::connect(frogpilotUIState(), &FrogPilotUIState::themeUpdated, this, &ExperimentalButton::updateTheme);
+
+  // Keith: hold the wheel for 0.8 s while parked to pick a theme
+  long_press_timer = new QTimer(this);
+  long_press_timer->setSingleShot(true);
+  long_press_timer->setInterval(800);
+  QObject::connect(long_press_timer, &QTimer::timeout, this, [this]() {
+    long_press_fired = true;
+    showThemePicker();
+  });
+  QObject::connect(this, &QPushButton::pressed, this, [this]() {
+    long_press_fired = false;
+    if (parked) {
+      long_press_timer->start();
+    }
+  });
+  QObject::connect(this, &QPushButton::released, long_press_timer, &QTimer::stop);
+}
+
+static QString themeDisplayName(const QString &key) {
+  QString base = key;
+  base.remove("-user_created");
+  bool animated = base.endsWith("-animated");
+  base.remove("-animated");
+  QString creator;
+  int tilde = base.indexOf('~');
+  if (tilde >= 0) {
+    creator = base.mid(tilde + 1);
+    base = base.left(tilde);
+  }
+  QStringList words;
+  for (const QString &word : base.split('_')) {   // no SkipEmptyParts: deprecated in newer Qt and the build uses -Werror
+    if (!word.isEmpty()) words << word.left(1).toUpper() + word.mid(1);
+  }
+  QString name = words.join(' ');
+  if (animated) name += " (animated)";
+  if (!creator.isEmpty()) name += " by " + creator;
+  return name;
+}
+
+void ExperimentalButton::showThemePicker() {
+  // Same rule as ThemeManager.get_full_themes(): colors and sounds, plus icons (own or the "-animated" twin)
+  const QString packs = "/data/themes/theme_packs";
+  QDir dir(packs);
+  QMap<QString, QString> keyForName;
+  for (const QString &entry : dir.entryList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name)) {
+    QString base = QString(entry).remove("-animated");
+    bool full = QDir(packs + "/" + base + "/colors").exists() && QDir(packs + "/" + base + "/sounds").exists();
+    bool animatedIcons = QDir(packs + "/" + base + "-animated/icons").exists();
+    bool baseIcons = QDir(packs + "/" + base + "/icons").exists();
+    if (!full || !(animatedIcons || baseIcons)) continue;
+    QString key = animatedIcons ? base + "-animated" : base;
+    keyForName.insert(themeDisplayName(key), key);
+  }
+  if (keyForName.isEmpty()) return;
+
+  QString currentKey = QFileInfo(QFileInfo("../../frogpilot/assets/active_theme/icons").symLinkTarget()).dir().dirName();
+  QString current = keyForName.key(currentKey);
+
+  QString selection = MultiOptionDialog::getSelection(tr("Pick a theme"), keyForName.keys(), current, window());
+  if (selection.isEmpty() || !keyForName.contains(selection)) return;
+
+  // frogpilot_process switches everything (colors, icons, sounds, signals, wheel) when it sees this file
+  QFile request("/dev/shm/keith_theme_request.tmp");
+  if (request.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+    request.write(keyForName.value(selection).toUtf8());
+    request.close();
+    QFile::remove("/dev/shm/keith_theme_request");
+    QFile::rename("/dev/shm/keith_theme_request.tmp", "/dev/shm/keith_theme_request");
+  }
 }
 
 void ExperimentalButton::showEvent(QShowEvent *event) {
@@ -76,6 +155,11 @@ void ExperimentalButton::updateState(const UIState &s, const FrogPilotUIState &f
 
   // FrogPilot variables
   const cereal::CarState::Reader &carState = (*s.sm)["carState"].getCarState();
+
+  parked = (*fs.sm)["frogpilotCarState"].getFrogpilotCarState().getParked() && carState.getStandstill();
+  if (!parked) {
+    long_press_timer->stop();
+  }
 
   int steering_angle = frogpilot_toggles.value(QLatin1String("rotating_wheel")).toBool() ? -carState.getSteeringAngleDeg() : 0;
   QColor color = backgroundColor();

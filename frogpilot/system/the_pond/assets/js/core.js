@@ -405,6 +405,7 @@ const NAV = [
     { id: "maps", label: "Speed Limit Maps", icon: "maps" },
     { id: "speed_limits", label: "Saved Speed Limits", icon: "flag" },
     { id: "startup", label: "Startup Alert", icon: "startup" },
+    { id: "theme_picker", label: "Pick a Theme", icon: "star" },
     { id: "theme", label: "Theme Maker", icon: "pencil" },
     { id: "themes", label: "Themes", icon: "theme" },
     { id: "toggles", label: "Toggles", icon: "settings" }
