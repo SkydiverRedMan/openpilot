@@ -955,6 +955,10 @@ const ACTIONS = {
     history.pushState(null, "", href("navigation"));
     checkState();
   },
+  "open-theme-picker": () => {
+    history.pushState(null, "", href("theme_picker"));
+    checkState();
+  },
   retry: btn => busy(btn, render(false)),
   reconnect: async btn => {
     try {
@@ -1119,9 +1123,12 @@ function showLocked(holder) {
   let openNavigation = "";
 
   if (navigationShown()) {
-    exception = ", except for Navigation";
+    exception = ", except for Navigation and Pick a Theme";
     openNavigation = `<button class="btn btn-primary" data-act="open-navigation">Open Navigation</button>`;
+  } else {
+    exception = ", except for Pick a Theme";
   }
+  openNavigation += ` <button class="btn btn-quiet" data-act="open-theme-picker">Pick a Theme</button>`;
 
   holder.innerHTML = `<div class="overlay full state-page" role="alertdialog" aria-modal="true" aria-labelledby="lk-h" aria-describedby="lk-p" tabindex="-1">
     ${stateBrand()}
@@ -1295,7 +1302,7 @@ async function checkState() {
       Object.assign(state, await response.json());
       next = "";
 
-      if (state.locked && !(navigationShown() && viewFromPath() === "navigation")) {
+      if (state.locked && !(navigationShown() && viewFromPath() === "navigation") && viewFromPath() !== "theme_picker") {
         next = "locked";
       } else if (state.pairing && !state.paired) {
         next = "pairing";

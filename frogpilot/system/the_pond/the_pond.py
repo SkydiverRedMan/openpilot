@@ -43,6 +43,7 @@ MAX_ERROR_DETAIL_LENGTH = 200
 MAX_UPLOAD_SIZE = 100 * 1024 * 1024
 
 NAVIGATION_API_PATH = "/api/navigation"
+THEME_PICKER_API_PATH = "/api/theme_picker"  # Keith: a passenger can switch themes while driving
 
 OPEN_PATHS = {"/api/pair", "/api/state"}
 
@@ -109,7 +110,7 @@ async def guard(request, handler):
     the_pond.update()
 
     if request.path not in OPEN_PATHS:
-      allowed_while_driving = request.path == NAVIGATION_API_PATH or request.path.startswith(f"{NAVIGATION_API_PATH}/")
+      allowed_while_driving = any(request.path == path or request.path.startswith(f"{path}/") for path in (NAVIGATION_API_PATH, THEME_PICKER_API_PATH))
 
       if the_pond.locked and not allowed_while_driving:
         raise utilities.HTTPLocked(text="locked")

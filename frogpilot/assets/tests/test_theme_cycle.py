@@ -142,3 +142,13 @@ def test_ui_long_press_is_parked_only_and_keeps_the_tap():
   assert "if (parked) {\n      long_press_timer->start();" in ui
   assert "if (long_press_fired) {" in ui and "changeMode();" in ui
   assert '"/dev/shm/keith_theme_request"' in ui
+
+
+def test_pond_allows_the_theme_picker_while_driving():
+  from pathlib import Path
+  root = Path(__file__).resolve().parents[2] / "system/the_pond"
+  server = (root / "the_pond.py").read_text(encoding="utf-8")
+  assert 'THEME_PICKER_API_PATH = "/api/theme_picker"' in server
+  assert "for path in (NAVIGATION_API_PATH, THEME_PICKER_API_PATH)" in server
+  page = (root / "assets/js/core.js").read_text(encoding="utf-8")
+  assert 'viewFromPath() !== "theme_picker"' in page and '"open-theme-picker"' in page
