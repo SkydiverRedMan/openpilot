@@ -19,6 +19,55 @@ WHEEL_EXTENSIONS = (".gif", ".png", ".svg")
 # Keith: the paramotor wheel is always shown, except during holiday themes and random events (both still change it)
 KEITH_WHEEL = "paramotor"
 
+# Keith's theme test cycle. While this file says {"enabled": true} (and Random Themes is on), each boot shows the next
+# theme in "order" with all of its parts, its own steering wheel included; after a drive the theme stays the same.
+# {"enabled": false} or no file: Random Themes and the paramotor wheel lock work as usual. No release needed to switch.
+THEME_CYCLE_PATH = Path("/data/themes/keith_theme_cycle.json")
+
+
+def load_theme_cycle(path=None):
+  try:
+    with open(path or THEME_CYCLE_PATH) as file:
+      cycle = json.load(file)
+  except (OSError, ValueError):
+    return None
+  if not isinstance(cycle, dict) or not cycle.get("enabled") or not isinstance(cycle.get("order"), list):
+    return None
+  return cycle
+
+
+def save_theme_cycle(cycle, path=None):
+  path = Path(path or THEME_CYCLE_PATH)
+  temp = path.with_name(path.name + ".tmp")
+  with open(temp, "w") as file:
+    json.dump(cycle, file, indent=2)
+  temp.replace(path)
+
+
+def cycle_theme(advance, path=None, packs_path=None):
+  """The cycle's theme: the next one when advance (boot), otherwise the current one. None when the cycle is off."""
+  cycle = load_theme_cycle(path)
+  if cycle is None:
+    return None
+
+  packs = Path(packs_path or frogpilot_paths.THEME_PACKS_PATH)
+  order = [key for key in cycle["order"] if isinstance(key, str) and (packs / key).is_dir()]
+  if not order:
+    return None
+
+  current = cycle.get("current")
+  if advance or current not in order:
+    index = cycle.get("next", 0)
+    index = index % len(order) if isinstance(index, int) else 0
+    current = order[index]
+    cycle["current"] = current
+    cycle["next"] = (index + 1) % len(order)
+    try:
+      save_theme_cycle(cycle, path)
+    except OSError:
+      pass
+  return current
+
 class ThemeManager:
   def __init__(self, params):
     self.params = params
@@ -450,6 +499,15 @@ class ThemeManager:
         "sound_pack": ("sounds", self.holiday_theme),
         "turn_signal_pack": ("signals", self.holiday_theme),
         "wheel_image": ("wheel_image", self.holiday_theme)
+      }
+    elif (boot_run or randomize_theme) and frogpilot_toggles.random_themes and (cycle_key := cycle_theme(advance=boot_run)):
+      asset_mappings = {
+        "color_scheme": ("colors", cycle_key),
+        "distance_icons": ("distance_icons", cycle_key),
+        "icon_pack": ("icons", cycle_key),
+        "sound_pack": ("sounds", cycle_key),
+        "turn_signal_pack": ("signals", cycle_key),
+        "wheel_image": ("wheel_image", cycle_key),   # the theme's own wheel while testing
       }
     elif (boot_run or randomize_theme) and frogpilot_toggles.random_themes:
       available_themes = self.get_full_themes()
