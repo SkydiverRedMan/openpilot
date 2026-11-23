@@ -1,4 +1,5 @@
-"""The Pond: Keith's "Pick a Theme" page. Lists every installed full theme and switches everything to one right away.
+"""The Pond: Keith's "Pick a Theme" page. Lists Keith's own installed themes by category (never downloaded ones) and
+switches everything to one right away.
 
 Switching is done by frogpilot_process (theme_manager.apply_picked_theme) when it sees the request file, the same path
 the parked long-press on the driving screen's wheel button uses.
@@ -7,7 +8,7 @@ import json
 
 from aiohttp import web
 
-from openpilot.frogpilot.assets.theme_manager import KEITH_WHEEL, ThemeManager, load_theme_cycle, request_theme
+from openpilot.frogpilot.assets.theme_manager import KEITH_WHEEL, ThemeManager, cycle_status, keith_theme_groups, request_theme
 from openpilot.frogpilot.common import frogpilot_paths
 from openpilot.frogpilot.system.the_pond import utilities
 
@@ -38,7 +39,8 @@ def active_theme():
 
 
 def installed():
-  return ThemeManager.get_full_themes()
+  """Keith's own full themes only; downloaded themes stay on the comma but aren't offered."""
+  return [key for group in keith_theme_groups(ThemeManager.get_full_themes()) for key in group[1]]
 
 
 def get_key(request):
@@ -72,15 +74,16 @@ def colors_of(key):
 @routes.get("/api/theme_picker")
 async def list_themes(request):
   current = active_theme()
-  cycle = load_theme_cycle()
-  themes = [{"colors": colors_of(key), "current": key == current, "key": key, "name": display_name(key)} for key in installed()]
-  themes.sort(key=lambda theme: (not theme["key"].endswith("-user_created"), theme["name"].lower()))
-  return web.json_response({
-    "cycle": {"enabled": cycle is not None, "next": display_name(cycle["order"][cycle.get("next", 0) % len(cycle["order"])])
-              if cycle and cycle["order"] else None},
-    "current": current,
-    "themes": themes,
-  })
+  status = cycle_status()
+  groups = [{"name": category, "themes": [{"colors": colors_of(key), "current": key == current, "key": key, "name": display_name(key)}
+                                          for key in keys]}
+            for category, keys in keith_theme_groups(ThemeManager.get_full_themes())]
+  cycle = {"enabled": status is not None}
+  if status is not None:
+    cycle_current, boots_left, following = status
+    cycle.update({"current": display_name(cycle_current) if cycle_current else None, "boots_left": boots_left,
+                  "next": display_name(following)})
+  return web.json_response({"current": current, "cycle": cycle, "groups": groups})
 
 
 @routes.get("/api/theme_picker/{key}/home")

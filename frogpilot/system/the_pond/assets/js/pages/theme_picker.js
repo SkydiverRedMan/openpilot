@@ -35,9 +35,17 @@ P.page("theme_picker", {
   title: "Pick a Theme",
   async render() {
     const data = await P.get("/api/theme_picker");
-    const cycle = data.cycle.enabled
-      ? `<div class="notice">${P.ic("refresh")}<span><b>Theme test cycle is on.</b> Each start-up shows the next theme; next up: ${P.esc(data.cycle.next || "")}. Picking one here continues the cycle from it.</span></div>`
-      : "";
+    const c = data.cycle;
+    let cycle = "";
+    if (c.enabled) {
+      const stay = c.current && c.boots_left > 0
+        ? `${P.esc(c.current)} stays for ${c.boots_left} more start-up${c.boots_left === 1 ? "" : "s"}, then ${P.esc(c.next)}.`
+        : `Next start-up: ${P.esc(c.next || "")}.`;
+      cycle = `<div class="notice">${P.ic("refresh")}<span><b>Theme cycle is on.</b> Each theme stays for 3 start-ups, taking turns between the categories. ${stay} A theme you pick here gets its own 3 start-ups.</span></div>`;
+    }
+    const groups = data.groups.map(group => `
+      <section class="panel"><div class="panel-body"><h3 class="tp-cat">${P.esc(group.name)}</h3>
+      <div class="tp-grid">${group.themes.map(card).join("")}</div></div></section>`).join("");
     return {
       body: `
       <style>
@@ -50,10 +58,11 @@ P.page("theme_picker", {
         .tp-imgs img.tp-wheel { width:48px; height:48px; }
         .tp-sws { display:flex; gap:4px; }
         .tp-sw { width:16px; height:16px; border-radius:4px; border:1px solid rgba(0,0,0,.2); }
+        .tp-cat { margin:0 0 10px; font-size:17px; }
         .tp-badge { display:inline-flex; align-items:center; gap:4px; font-size:13px; }
       </style>
       ${cycle}
-      <section class="panel"><div class="panel-body"><div class="tp-grid">${data.themes.map(card).join("")}</div></div></section>`
+      ${groups || `<div class="empty"><h3>None of your themes are installed</h3></div>`}`
     };
   }
 });
