@@ -142,8 +142,15 @@ def test_picked_mappings_use_every_part(tm, tmp_path):
   assert testing["wheel_image"] == ("wheel_image", "bravo-user_created")
   # outside the test cycle the paramotor wheel stays
   assert module.picked_theme_mappings("bravo-user_created", theme_wheels=False)["wheel_image"] == ("wheel_image", "paramotor")
-  # a theme without its own wheel keeps the paramotor wheel even while testing
-  assert module.picked_theme_mappings("alpha-user_created", theme_wheels=True)["wheel_image"] == ("wheel_image", "paramotor")
+  # a theme without its own wheel gets the stock wheel, never the paramotor wheel (2026-11-23)
+  assert module.picked_theme_mappings("alpha-user_created", theme_wheels=True)["wheel_image"] == ("wheel_image", "stock")
+
+
+def test_paramotor_wheel_is_never_used_while_theme_wheels_is_on():
+  from pathlib import Path
+  source = (Path(__file__).resolve().parents[1] / "theme_manager.py").read_text(encoding="utf-8")
+  assert "KEITH_THEME_WHEELS = True" in source
+  assert source.count('"wheel_image", KEITH_WHEEL)') == 0          # every KEITH_WHEEL use sits behind KEITH_THEME_WHEELS
 
 
 def test_animated_keys_use_base_colors_and_sounds(tm, tmp_path):

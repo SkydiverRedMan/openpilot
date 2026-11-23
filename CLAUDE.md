@@ -20,8 +20,10 @@ Personal FrogPilot fork for Keith's comma 3X in a Toyota Highlander. Never push 
   (`selfdrive/car/toyota/interface.py`, `opendbc/toyota_tnga_k_pt_generated.dbc`), his default settings, and saved speed
   limits (`docs/saved-speed-limits.md`; data in `/data/saved_speed_limits.json`, never delete it).
 * Theme test cycle (2026-11-22): `/data/themes/keith_theme_cycle.json` with `"enabled": true` makes each boot show the next
-  theme in its `order` (Keith's 16 themes from SkydiverRedMan/frogpilot-themes), own wheel included; set `enabled` false
-  to go back to Random Themes + paramotor wheel lock (no release needed). Holiday Themes was turned off for the test.
+  theme (each for 3 start-ups, categories taking turns; Keith's 46 themes from SkydiverRedMan/frogpilot-themes), own wheel
+  included; set `enabled` false to go back to Random Themes (no release needed). Holiday Themes was turned off for the test.
+* Wheels (2026-11-23, until Keith says otherwise): `KEITH_THEME_WHEELS = True` in `theme_manager.py` makes every theme show
+  its own wheel and never the paramotor wheel (also outside the cycle); set it False to bring back the paramotor wheel lock.
 * Theme picker (2026-11-22): The Pond -> Pick a Theme, or hold the driving screen's wheel button 0.8 s while parked.
   Both write `/dev/shm/keith_theme_request`; frogpilot_process applies it (`ThemeManager.apply_picked_theme`), kept until
   the next boot, and the test cycle continues after the picked theme. A normal tap still toggles Experimental Mode.
