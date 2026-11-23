@@ -213,7 +213,7 @@ def test_real_categories_alternate(tm):
   groups = module.keith_theme_groups(keys)
   order = module.spread_order(groups)
   category = {key: name for name, members in groups for key in members}
-  assert sorted(order) == sorted(keys) and order[0] == "redman-user_created"
+  assert sorted(order) == sorted(keys) and order[0] == "paramotor-user_created"
   assert all(category[a] != category[b] for a, b in zip(order, order[1:]))
 
 
@@ -224,6 +224,8 @@ def test_bundled_theme_installs_once_and_becomes_current(tm, tmp_path):
   bundle = tmp_path / "bundle"
   (bundle / "theme_packs" / "redman-user_created" / "colors").mkdir(parents=True)
   (bundle / "theme_packs" / "redman-user_created" / "colors" / "colors.json").write_text("{}")
+  (bundle / "theme_packs" / "redman-user_created" / "sounds").mkdir()
+  (bundle / "theme_packs" / "redman-user_created" / "sounds" / "engage.wav").write_bytes(b"RIFF")
   (bundle / "steering_wheels").mkdir()
   (bundle / "steering_wheels" / "redman-user_created.gif").write_bytes(b"GIF")
   wheels = tmp_path / "steering_wheels"
@@ -249,3 +251,126 @@ def test_process_installs_bundled_themes_at_start():
   from pathlib import Path
   source = (Path(__file__).resolve().parents[2] / "frogpilot_process.py").read_text(encoding="utf-8")
   assert source.index("theme_manager = ThemeManager(") < source.index("install_bundled_themes()")
+
+
+def test_photo_themes_have_their_own_category(tm):
+  module, _ = tm
+  assert module.KEITH_THEME_CATEGORIES["Photos"] == ["redman", "camping", "travel", "liz", "liz_and_keith", "pets"]
+  assert "redman" not in module.KEITH_THEME_CATEGORIES["Aviation"]
+  assert list(module.KEITH_THEME_CATEGORIES)[0] == "Photos"                     # listed first in Pick a Theme
+
+
+def test_redman_shows_first_when_several_bundled_themes_arrive(tm, tmp_path):
+  module, path = tm
+  bundle = tmp_path / "bundle"
+  for key in ("camping-user_created", "pets-user_created", "redman-user_created"):
+    (bundle / "theme_packs" / key).mkdir(parents=True)
+    (bundle / "theme_packs" / key / "x.txt").write_text(key)
+  write(path, enabled=True, current="alpha-user_created", boots=1)
+  new = module.install_bundled_themes(bundle=bundle, packs=tmp_path / "theme_packs", wheels=tmp_path / "wheels", cycle_path=path)
+  assert new[0] == "redman-user_created" and json.loads(path.read_text())["current"] == "redman-user_created"
+
+
+# ---------- how themes change (The Pond settings) ----------
+
+def make_packs(tmp_path, names):
+  packs = tmp_path / "theme_packs"
+  for old in ("alpha", "bravo", "charlie"):
+    (packs / f"{old}-user_created").rmdir()
+  for name in names:
+    (packs / f"{name}-user_created").mkdir(parents=True, exist_ok=True)
+  return packs
+
+
+def test_only_the_chosen_category(tm, tmp_path):
+  module, path = tm
+  make_packs(tmp_path, ["redman", "camping", "pets", "paramotor", "skydive", "sloth"])
+  write(path, enabled=True, categories=["Photos"], boots_per_theme=1)
+  seen = [module.cycle_theme(advance=True, path=path) for _ in range(6)]
+  assert set(seen) == {"redman-user_created", "camping-user_created", "pets-user_created"}
+
+
+def test_favorites_as_a_category(tm, tmp_path):
+  module, path = tm
+  make_packs(tmp_path, ["redman", "paramotor", "sloth"])
+  write(path, enabled=True, categories=["Favorites"], favorites=["sloth-user_created", "paramotor-user_created"], boots_per_theme=1)
+  assert {module.cycle_theme(advance=True, path=path) for _ in range(4)} == {"sloth-user_created", "paramotor-user_created"}
+
+
+def test_random_never_repeats_back_to_back(tm, tmp_path):
+  module, path = tm
+  make_packs(tmp_path, ["redman", "camping", "pets", "paramotor", "skydive", "sloth"])
+  write(path, enabled=True, mode="random", boots_per_theme=1)
+  seen = [module.cycle_theme(advance=True, path=path) for _ in range(30)]
+  assert all(a != b for a, b in zip(seen, seen[1:])) and len(set(seen)) >= 4
+
+
+def test_keep_one_theme(tm, tmp_path):
+  module, path = tm
+  make_packs(tmp_path, ["redman", "camping"])
+  write(path, enabled=True, mode="keep", current="camping-user_created", boots=9)
+  assert [module.cycle_theme(advance=True, path=path) for _ in range(5)] == ["camping-user_created"] * 5
+  assert module.peek_next_theme(path=path) == "redman-user_created"        # "Next theme now" still moves on
+
+
+def test_a_pick_outside_the_categories_gets_its_turn(tm, tmp_path):
+  module, path = tm
+  make_packs(tmp_path, ["redman", "camping", "sloth"])
+  write(path, enabled=True, categories=["Photos"], boots_per_theme=2)
+  module.move_cycle_to("sloth-user_created", path)
+  assert [module.cycle_theme(advance=True, path=path) for _ in range(3)][:2] == ["sloth-user_created"] * 2
+
+
+def test_settings_round_trip(tm, tmp_path):
+  module, path = tm
+  write(path, enabled=True, order=["alpha-user_created"])
+  s = module.update_theme_settings({"mode": "random", "boots_per_theme": 5, "categories": ["Photos", "Nope"], "enabled": True}, path)
+  assert s["mode"] == "random" and s["boots_per_theme"] == 5 and s["categories"] == ["Photos"]
+  assert "order" not in json.loads(path.read_text())                   # the category order takes over
+  s = module.update_theme_settings({"favorite": "sloth-user_created"}, path)
+  assert s["favorites"] == ["sloth-user_created"]
+  s = module.update_theme_settings({"favorite": "sloth-user_created", "starred": False, "boots_per_theme": 99, "mode": "bogus"}, path)
+  assert s["favorites"] == [] and s["boots_per_theme"] == 5 and s["mode"] == "random"
+
+
+def test_pond_has_the_theme_settings():
+  from pathlib import Path
+  root = Path(__file__).resolve().parents[2] / "system/the_pond"
+  server = (root / "theme_picker.py").read_text(encoding="utf-8")
+  assert '@routes.post("/api/theme_picker/settings")' in server and '@routes.post("/api/theme_picker/next")' in server
+  page = (root / "assets/js/pages/theme_picker.js").read_text(encoding="utf-8")
+  for act in ("theme-mode", "theme-boots", "theme-category", "theme-star", "theme-next", "theme-enabled"):
+    assert f'"{act}"' in page
+
+
+def _bundle(tmp_path, key="redman-user_created"):
+  bundle = tmp_path / "bundle"
+  for part in ("colors", "sounds"):
+    (bundle / "theme_packs" / key / part).mkdir(parents=True, exist_ok=True)
+    (bundle / "theme_packs" / key / part / "x").write_text(part)
+  (bundle / "steering_wheels").mkdir(exist_ok=True)
+  (bundle / "steering_wheels" / f"{key}.gif").write_bytes(b"GIF1")
+  return bundle
+
+
+def test_a_wheel_only_change_is_installed(tm, tmp_path):
+  module, path = tm
+  bundle = _bundle(tmp_path)
+  kwargs = dict(bundle=bundle, packs=tmp_path / "theme_packs", wheels=tmp_path / "wheels", cycle_path=path)
+  module.install_bundled_themes(**kwargs)
+  (bundle / "steering_wheels" / "redman-user_created.gif").write_bytes(b"GIF2")
+  module.install_bundled_themes(**kwargs)
+  assert (tmp_path / "wheels" / "redman-user_created.gif").read_bytes() == b"GIF2"
+
+
+def test_a_deleted_bundled_theme_stays_deleted(tm, tmp_path):
+  import shutil
+  module, path = tm
+  bundle = _bundle(tmp_path)
+  packs = tmp_path / "theme_packs"
+  kwargs = dict(bundle=bundle, packs=packs, wheels=tmp_path / "wheels", cycle_path=path)
+  assert module.install_bundled_themes(**kwargs) == ["redman-user_created"]
+  shutil.rmtree(packs / "redman-user_created" / "colors")        # deleted in The Pond: parts removed, marker left
+  assert module.install_bundled_themes(**kwargs) == []
+  assert not (packs / "redman-user_created").exists()            # no blank leftover in the cycle
+  assert module.install_bundled_themes(**kwargs) == [] and not (packs / "redman-user_created").exists()   # not brought back

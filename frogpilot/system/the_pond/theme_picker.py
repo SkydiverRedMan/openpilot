@@ -8,7 +8,9 @@ import json
 
 from aiohttp import web
 
-from openpilot.frogpilot.assets.theme_manager import KEITH_WHEEL, ThemeManager, cycle_status, keith_theme_groups, request_theme
+from openpilot.frogpilot.assets.theme_manager import (FAVORITES, KEITH_THEME_CATEGORIES, KEITH_WHEEL, ThemeManager, cycle_status,
+                                                      keith_theme_groups, peek_next_theme, request_theme, theme_settings,
+                                                      update_theme_settings)
 from openpilot.frogpilot.common import frogpilot_paths
 from openpilot.frogpilot.system.the_pond import utilities
 
@@ -22,7 +24,10 @@ def display_name(key):
   animated = base.endswith("-animated")
   base = base.removesuffix("-animated")
   base, _, creator = base.partition("~")
-  name = " ".join(word.capitalize() for word in base.replace("_", " ").split())
+  special = {"redman": "RedMan", "hud": "HUD", "1984": "1984"}
+  small = {"and", "of", "the"}
+  words = base.replace("_", " ").split()
+  name = " ".join(special.get(w, w if (i and w in small) else w.capitalize()) for i, w in enumerate(words))
   if animated:
     name += " (animated)"
   if creator:
@@ -74,16 +79,40 @@ def colors_of(key):
 @routes.get("/api/theme_picker")
 async def list_themes(request):
   current = active_theme()
-  status = cycle_status()
-  groups = [{"name": category, "themes": [{"colors": colors_of(key), "current": key == current, "key": key, "name": display_name(key)}
-                                          for key in keys]}
+  settings = theme_settings()
+  favorites = set(settings["favorites"])
+  groups = [{"name": category, "themes": [{"colors": colors_of(key), "current": key == current, "favorite": key in favorites, "key": key,
+                                           "name": display_name(key)} for key in keys]}
             for category, keys in keith_theme_groups(ThemeManager.get_full_themes())]
+  status = cycle_status()
   cycle = {"enabled": status is not None}
   if status is not None:
     cycle_current, boots_left, following = status
     cycle.update({"current": display_name(cycle_current) if cycle_current else None, "boots_left": boots_left,
-                  "next": display_name(following)})
-  return web.json_response({"current": current, "cycle": cycle, "groups": groups})
+                  "next": display_name(following) if following else None})
+  categories = [name for name in KEITH_THEME_CATEGORIES if any(group["name"] == name for group in groups)] + [FAVORITES]
+  return web.json_response({"categories": categories, "current": current, "cycle": cycle, "groups": groups, "settings": settings})
+
+
+@routes.post("/api/theme_picker/settings")
+async def save_settings(request):
+  """How themes change: mode, start-ups per theme, categories, and starring a favorite."""
+  changes = await utilities.read_json(request)
+  if not isinstance(changes, dict):
+    raise web.HTTPBadRequest(text="bad_settings")
+  if changes.get("favorite") is not None and changes["favorite"] not in installed():
+    raise web.HTTPBadRequest(text="unknown_theme")
+  return web.json_response(update_theme_settings(changes))
+
+
+@routes.post("/api/theme_picker/next")
+async def next_now(request):
+  """Switch to the theme that would come next, right away."""
+  key = peek_next_theme()
+  if key is None or key not in installed():
+    raise web.HTTPBadRequest(text="no_next_theme")
+  request_theme(key)
+  return web.json_response({"name": display_name(key)})
 
 
 @routes.get("/api/theme_picker/{key}/home")
