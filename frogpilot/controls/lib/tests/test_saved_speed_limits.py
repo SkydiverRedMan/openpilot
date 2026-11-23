@@ -672,3 +672,13 @@ def test_pond_lists_and_edits_spots(pond):
   assert pond.store.read_entries()[key]["speed_limit"] == pytest.approx(65 * MPH)
   assert pond.call("DELETE", f"/api/saved_speed_limits/{key}")[0] == 204
   assert pond.store.read_entries() == {}
+
+
+def test_picker_buttons_are_big():
+  camera = (REPO / "frogpilot/ui/qt/onroad/frogpilot_annotated_camera.cc").read_text(encoding="utf-8")
+  painter = camera[camera.index("void FrogPilotAnnotatedCameraWidget::paintSpeedLimitPicker"):]
+  painter = painter[:painter.index("\n}\n")]
+  # no map: about 300 x 315 buttons; map showing: today's width, much taller, panel moved up beside MAX
+  assert "const bool wide = width() >= 1500;" in painter and "wide ? 300 : 172" in painter and "wide ? 315 : 290" in painter
+  assert "wide ? speedLimitRect.top() : setSpeedRect.top()" in painter
+  assert "height() - UI_BORDER_SIZE - origin.y()" in painter              # never runs off the bottom of the screen

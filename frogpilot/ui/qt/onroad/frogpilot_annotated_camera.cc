@@ -509,12 +509,16 @@ bool FrogPilotAnnotatedCameraWidget::speedLimitPickerHit(const QPoint &pos, floa
 void FrogPilotAnnotatedCameraWidget::paintSpeedLimitPicker(QPainter &p) {
   p.save();
 
+  // Keith: big buttons. Without the map the panel fills most of the road view; with the map showing (narrow camera
+  // view) the buttons keep their width but get much taller, and the panel moves up beside the MAX box to make room.
+  const bool wide = width() >= 1500;
   const int columns = 4;
-  const int buttonWidth = 150;
-  const int buttonHeight = 130;
-  const int gap = 20;
-  const int padding = 20;
-  const int headerHeight = 60;
+  const int gap = wide ? 24 : 16;
+  const int padding = wide ? 24 : 18;
+  const int headerHeight = wide ? 76 : 64;
+  const int buttonWidth = wide ? 300 : 172;
+  const int numberSize = wide ? 140 : 92;
+  const int actionSize = wide ? 60 : 40;
 
   const QColor cruiseColor(30, 110, 220);
 
@@ -522,14 +526,20 @@ void FrogPilotAnnotatedCameraWidget::paintSpeedLimitPicker(QPainter &p) {
   int gridCount = speedLimitChoices.size() - (hasCruise ? 1 : 0);
   int rows = (gridCount + columns - 1) / columns;
   int gridWidth = columns * buttonWidth + (columns - 1) * gap;
-  int gridHeight = rows * buttonHeight + (rows - 1) * gap;
-  QPoint origin(speedLimitRect.right() + UI_BORDER_SIZE, speedLimitRect.top());
+  QPoint origin(speedLimitRect.right() + UI_BORDER_SIZE, wide ? speedLimitRect.top() : setSpeedRect.top());
 
   // Cruise button as a fifth column on the right; if the camera view is too narrow (map open), as a row underneath
   bool cruiseRight = hasCruise && origin.x() + 2 * padding + gridWidth + gap + buttonWidth <= width() - UI_BORDER_SIZE;
   bool cruiseBelow = hasCruise && !cruiseRight;
+
+  // As tall as fits on the screen (a row of cruise underneath is 55% of a button's height)
+  int available = height() - UI_BORDER_SIZE - origin.y() - headerHeight - 2 * padding - (rows - 1) * gap - (cruiseBelow ? gap : 0);
+  int buttonHeight = std::clamp(available * 100 / (rows * 100 + (cruiseBelow ? 55 : 0)), 130, wide ? 315 : 290);
+  int cruiseHeight = buttonHeight * 55 / 100;
+  int gridHeight = rows * buttonHeight + (rows - 1) * gap;
+
   QSize panelSize(2 * padding + gridWidth + (cruiseRight ? gap + buttonWidth : 0),
-                  headerHeight + padding + gridHeight + (cruiseBelow ? gap + buttonHeight : 0) + padding);
+                  headerHeight + padding + gridHeight + (cruiseBelow ? gap + cruiseHeight : 0) + padding);
   speedLimitPickerRect = QRect(origin, panelSize);
 
   p.setPen(Qt::NoPen);
@@ -537,7 +547,7 @@ void FrogPilotAnnotatedCameraWidget::paintSpeedLimitPicker(QPainter &p) {
   p.drawRoundedRect(speedLimitPickerRect, 24, 24);
 
   p.setPen(whiteColor());
-  p.setFont(InterFont(40, QFont::DemiBold));
+  p.setFont(InterFont(wide ? 46 : 40, QFont::DemiBold));
   p.drawText(speedLimitPickerRect.adjusted(padding, 0, -padding, 0).translated(0, padding / 2), Qt::AlignTop | Qt::AlignHCenter,
              tr("Tap the real speed limit (%1)").arg(speedUnit.trimmed()));
 
@@ -547,7 +557,7 @@ void FrogPilotAnnotatedCameraWidget::paintSpeedLimitPicker(QPainter &p) {
     SpeedLimitChoice &choice = speedLimitChoices[i];
     if (choice.cruise) {
       choice.rect = cruiseRight ? QRect(gridLeft + gridWidth + gap, gridTop, buttonWidth, gridHeight)
-                                : QRect(gridLeft, gridTop + gridHeight + gap, gridWidth, buttonHeight);
+                                : QRect(gridLeft, gridTop + gridHeight + gap, gridWidth, cruiseHeight);
 
       p.setBrush(cruiseColor);
       p.setPen(QPen(whiteColor(), 4));
@@ -556,9 +566,9 @@ void FrogPilotAnnotatedCameraWidget::paintSpeedLimitPicker(QPainter &p) {
       p.setPen(whiteColor());
       QRect numberRect = cruiseRight ? choice.rect.adjusted(0, 0, 0, -50) : choice.rect.adjusted(0, 0, -choice.rect.width() / 2 + 40, 0);
       QRect captionRect = cruiseRight ? choice.rect.adjusted(0, choice.rect.height() - 90, 0, -20) : choice.rect.adjusted(choice.rect.width() / 2 - 20, 0, 0, 0);
-      p.setFont(InterFont(72, QFont::Bold));
+      p.setFont(InterFont(cruiseRight ? numberSize : std::min(numberSize, cruiseHeight - 40), QFont::Bold));
       p.drawText(numberRect, Qt::AlignCenter, choice.label);
-      p.setFont(InterFont(28, QFont::DemiBold));
+      p.setFont(InterFont(wide ? 40 : 30, QFont::DemiBold));
       p.drawText(captionRect, cruiseRight ? (Qt::AlignCenter | Qt::TextWordWrap) : (Qt::AlignVCenter | Qt::AlignLeft), tr("MY CRUISE"));
       continue;
     }
@@ -573,7 +583,7 @@ void FrogPilotAnnotatedCameraWidget::paintSpeedLimitPicker(QPainter &p) {
     p.drawRoundedRect(choice.rect.adjusted(5, 5, -5, -5), 18, 18);
 
     p.setPen(action ? whiteColor() : blackColor());
-    p.setFont(action ? InterFont(40, QFont::DemiBold) : InterFont(64, QFont::Bold));
+    p.setFont(action ? InterFont(actionSize, QFont::DemiBold) : InterFont(numberSize, QFont::Bold));
     p.drawText(choice.rect, Qt::AlignCenter, choice.label);
   }
 
