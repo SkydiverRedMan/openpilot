@@ -19,10 +19,67 @@ WHEEL_EXTENSIONS = (".gif", ".png", ".svg")
 # Keith: the paramotor wheel is always shown, except during holiday themes and random events (both still change it)
 KEITH_WHEEL = "paramotor"
 
-# Keith's theme test cycle. While this file says {"enabled": true} (and Random Themes is on), each boot shows the next
-# theme in "order" with all of its parts, its own steering wheel included; after a drive the theme stays the same.
-# {"enabled": false} or no file: Random Themes and the paramotor wheel lock work as usual. No release needed to switch.
+# Keith's own themes (SkydiverRedMan/frogpilot-themes), by category. Only these show in the theme pickers, and the
+# test cycle rotates through the categories. A "-user_created" theme missing here still counts, under "More".
+KEITH_THEME_CATEGORIES = {
+  "Aviation": ["paramotor", "paramotor_flight_tracker", "skydive", "tandem_skydive", "drop_zone_sunset", "wingsuit",
+               "hang_glider", "sunset_glide", "hot_air_balloon", "glass_cockpit", "night_flight", "airshow", "barnstormer",
+               "fighter_hud", "helicopter", "seaplane", "bush_pilot", "quadcopter", "rocket_launch", "kite_festival",
+               "storm_front"],
+  "Animals": ["honey_badger", "bald_eagle", "flying_squirrel", "hummingbird", "red_fox", "sea_otter", "penguin", "sloth",
+              "hedgehog", "raccoon"],
+  "Spooky": ["midnight_horror", "haunted_mansion", "graveyard_fog", "mad_scientist_lab"],
+  "Places": ["aurora", "deep_sea", "desert_highway", "snow_day"],
+  "Camping": ["campfire", "lantern_trail", "canoe_lake"],
+  "Fun": ["saturday_cartoon", "retro_arcade", "rubber_duck_rally", "synthwave_1984"],
+}
+KEITH_THEME_SUFFIX = "-user_created"
+
+
+def is_keith_theme(key):
+  return isinstance(key, str) and key.endswith(KEITH_THEME_SUFFIX)
+
+
+def keith_theme_groups(keys):
+  """[(category, [keys])] for Keith's installed themes, in the categories' order; unlisted ones under "More"."""
+  mine = {key for key in keys if is_keith_theme(key)}
+  groups, listed = [], set()
+  for category, names in KEITH_THEME_CATEGORIES.items():
+    members = [name + KEITH_THEME_SUFFIX for name in names if name + KEITH_THEME_SUFFIX in mine]
+    listed.update(members)
+    if members:
+      groups.append((category, members))
+  rest = sorted(mine - listed)
+  if rest:
+    groups.append(("More", rest))
+  return groups
+
+
+def spread_order(groups):
+  """One list that takes turns between the categories: each category's themes are spread evenly over the list (bigger
+  categories come up more often), and the same category never comes twice in a row while another one is left."""
+  queues = [list(members) for _, members in groups]
+  taken = [0] * len(queues)
+  order, last = [], None
+  while any(queues):
+    choices = [rank for rank, queue in enumerate(queues) if queue and rank != last] or [last]
+    biggest = max(choices, key=lambda r: len(queues[r]))
+    if len(queues[biggest]) > sum(map(len, queues)) - len(queues[biggest]):
+      rank = biggest                                       # otherwise it would end up twice in a row at the end
+    else:
+      rank = min(choices, key=lambda r: ((taken[r] + 0.5) / len(groups[r][1]), r))
+    order.append(queues[rank].pop(0))
+    taken[rank] += 1
+    last = rank
+  return order
+
+
+# Keith's theme test cycle. While this file says {"enabled": true} (and Random Themes is on), each theme stays for
+# "boots_per_theme" start-ups (3) and the next one comes on the start-up after that, taking turns between the
+# categories above. All of its parts show, its own steering wheel included. An "order" list in the file overrides the
+# category order. {"enabled": false} or no file: Random Themes and the paramotor wheel lock work as usual.
 THEME_CYCLE_PATH = Path("/data/themes/keith_theme_cycle.json")
+BOOTS_PER_THEME = 3
 
 
 def load_theme_cycle(path=None):
@@ -31,7 +88,7 @@ def load_theme_cycle(path=None):
       cycle = json.load(file)
   except (OSError, ValueError):
     return None
-  if not isinstance(cycle, dict) or not cycle.get("enabled") or not isinstance(cycle.get("order"), list):
+  if not isinstance(cycle, dict) or not cycle.get("enabled") or not isinstance(cycle.get("order", []), list):
     return None
   return cycle
 
@@ -42,6 +99,36 @@ def save_theme_cycle(cycle, path=None):
   with open(temp, "w") as file:
     json.dump(cycle, file, indent=2)
   temp.replace(path)
+
+
+def boots_per_theme(cycle):
+  value = cycle.get("boots_per_theme", BOOTS_PER_THEME)
+  return value if isinstance(value, int) and value >= 1 else BOOTS_PER_THEME
+
+
+def cycle_order(cycle, packs_path=None):
+  packs = Path(packs_path or frogpilot_paths.THEME_PACKS_PATH)
+  if cycle.get("order"):
+    return [key for key in cycle["order"] if isinstance(key, str) and (packs / key).is_dir()]
+  installed = [path.name for path in packs.glob("*") if path.is_dir()] if packs.is_dir() else []
+  return spread_order(keith_theme_groups(installed))
+
+
+def cycle_status(path=None, packs_path=None):
+  """(current, start-ups left for it after this one, next) for The Pond; None when the cycle is off."""
+  cycle = load_theme_cycle(path)
+  if cycle is None:
+    return None
+  order = cycle_order(cycle, packs_path)
+  if not order:
+    return None
+  current = cycle.get("current")
+  if current in order:
+    following = order[(order.index(current) + 1) % len(order)]
+  else:
+    following = order[cycle.get("next", 0) % len(order) if isinstance(cycle.get("next"), int) else 0]
+  boots = cycle.get("boots", 0) if isinstance(cycle.get("boots"), int) else 0
+  return current, max(boots_per_theme(cycle) - boots, 0), following
 
 
 # "Switch to this theme now" requests from The Pond's theme picker and the parked long-press on the wheel button.
@@ -84,13 +171,17 @@ def picked_theme_mappings(key, theme_wheels):
 
 
 def move_cycle_to(key, path=None):
-  """A theme picked by hand becomes the cycle's current theme, so the next boot continues after it."""
+  """A theme picked by hand becomes the cycle's current theme for its full number of start-ups, then the cycle goes on
+  from it."""
   cycle = load_theme_cycle(path)
-  if cycle is None or key not in cycle["order"]:
+  if cycle is None:
     return
-  index = cycle["order"].index(key)
+  order = cycle_order(cycle)
+  if key not in order:
+    return
   cycle["current"] = key
-  cycle["next"] = (index + 1) % len(cycle["order"])
+  cycle["boots"] = 0
+  cycle["next"] = (order.index(key) + 1) % len(order)
   try:
     save_theme_cycle(cycle, path)
   except OSError:
@@ -98,28 +189,39 @@ def move_cycle_to(key, path=None):
 
 
 def cycle_theme(advance, path=None, packs_path=None):
-  """The cycle's theme: the next one when advance (boot), otherwise the current one. None when the cycle is off."""
+  """The cycle's theme. At a start-up (advance) the current one counts one more start-up, or the next one comes on once
+  the current one had all of its start-ups. Otherwise just the current one. None when the cycle is off."""
   cycle = load_theme_cycle(path)
   if cycle is None:
     return None
 
-  packs = Path(packs_path or frogpilot_paths.THEME_PACKS_PATH)
-  order = [key for key in cycle["order"] if isinstance(key, str) and (packs / key).is_dir()]
+  order = cycle_order(cycle, packs_path)
   if not order:
     return None
 
   current = cycle.get("current")
-  if advance or current not in order:
-    index = cycle.get("next", 0)
-    index = index % len(order) if isinstance(index, int) else 0
+  boots = cycle.get("boots", 0) if isinstance(cycle.get("boots"), int) else 0
+  if current in order and (not advance or boots < boots_per_theme(cycle)):
+    if advance:
+      cycle["boots"] = boots + 1
+    else:
+      return current
+  else:
+    if current in order:
+      index = order.index(current) + 1
+    else:
+      index = cycle.get("next", 0) if isinstance(cycle.get("next"), int) else 0
+    index %= len(order)
     current = order[index]
     cycle["current"] = current
+    cycle["boots"] = 1
     cycle["next"] = (index + 1) % len(order)
-    try:
-      save_theme_cycle(cycle, path)
-    except OSError:
-      pass
+  try:
+    save_theme_cycle(cycle, path)
+  except OSError:
+    pass
   return current
+
 
 class ThemeManager:
   def __init__(self, params):

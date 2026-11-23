@@ -33,14 +33,14 @@ def write(path, **cycle):
 
 def test_each_boot_shows_the_next_theme_and_wraps(tm):
   module, path = tm
-  write(path, enabled=True, order=["alpha-user_created", "bravo-user_created", "charlie-user_created"], next=0)
+  write(path, enabled=True, order=["alpha-user_created", "bravo-user_created", "charlie-user_created"], next=0, boots_per_theme=1)
   seen = [module.cycle_theme(advance=True, path=path) for _ in range(4)]
   assert seen == ["alpha-user_created", "bravo-user_created", "charlie-user_created", "alpha-user_created"]
 
 
 def test_after_a_drive_the_theme_stays(tm):
   module, path = tm
-  write(path, enabled=True, order=["alpha-user_created", "bravo-user_created"], next=0)
+  write(path, enabled=True, order=["alpha-user_created", "bravo-user_created"], next=0, boots_per_theme=1)
   assert module.cycle_theme(advance=True, path=path) == "alpha-user_created"
   assert module.cycle_theme(advance=False, path=path) == "alpha-user_created"
   assert module.cycle_theme(advance=False, path=path) == "alpha-user_created"
@@ -54,12 +54,50 @@ def test_deleted_themes_are_skipped(tm):
 
 
 @pytest.mark.parametrize("content", [None, "{not json", json.dumps({"enabled": False, "order": ["alpha-user_created"]}),
-                                     json.dumps({"enabled": True, "order": []}), json.dumps({"enabled": True})])
+                                     json.dumps({"enabled": True, "order": "alpha-user_created"})])
 def test_cycle_off(tm, content):
   module, path = tm
   if content is not None:
     path.write_text(content)
   assert module.cycle_theme(advance=True, path=path) is None
+
+
+def test_each_theme_stays_three_start_ups(tm):
+  module, path = tm
+  write(path, enabled=True, order=["alpha-user_created", "bravo-user_created"], next=0)
+  seen = [module.cycle_theme(advance=True, path=path) for _ in range(7)]
+  assert seen == ["alpha-user_created"] * 3 + ["bravo-user_created"] * 3 + ["alpha-user_created"]
+  # drives and settings changes in between don't count
+  assert module.cycle_theme(advance=False, path=path) == "alpha-user_created"
+  assert module.cycle_status(path=path) == ("alpha-user_created", 2, "bravo-user_created")
+
+
+def test_start_ups_already_shown_count(tm):
+  module, path = tm
+  write(path, enabled=True, order=["alpha-user_created", "bravo-user_created"], current="alpha-user_created", boots=2)
+  assert [module.cycle_theme(advance=True, path=path) for _ in range(2)] == ["alpha-user_created", "bravo-user_created"]
+
+
+def test_without_an_order_the_categories_take_turns(tm, tmp_path):
+  module, path = tm
+  packs = tmp_path / "theme_packs"
+  for old in ("alpha", "bravo", "charlie"):
+    (packs / f"{old}-user_created").rmdir()
+  for name in ("paramotor", "skydive", "glass_cockpit", "honey_badger", "sloth", "campfire", "my_new_one"):
+    (packs / f"{name}-user_created").mkdir()
+  (packs / "tesla").mkdir()                                   # downloaded themes never join the cycle
+  write(path, enabled=True)
+  seen = [module.cycle_theme(advance=True, path=path) for _ in range(3 * 8)][::3]
+  categories = {key: category for category, keys in module.keith_theme_groups([p.name for p in packs.iterdir()]) for key in keys}
+  assert seen[0] == "paramotor-user_created" and seen[1] == "honey_badger-user_created"
+  assert "tesla" not in seen and "my_new_one-user_created" in seen and len(set(seen[:7])) == 7
+  assert all(categories[a] != categories[b] for a, b in zip(seen[:7], seen[1:7]))   # never the same category twice in a row
+
+
+def test_only_keiths_themes_are_grouped(tm):
+  module, _ = tm
+  groups = module.keith_theme_groups(["frog-animated", "duck", "tesla", "sloth-user_created", "paramotor-user_created", "zzz-user_created"])
+  assert groups == [("Aviation", ["paramotor-user_created"]), ("Animals", ["sloth-user_created"]), ("More", ["zzz-user_created"])]
 
 
 def test_position_is_saved_across_restarts(tm):
@@ -120,7 +158,8 @@ def test_pick_moves_the_cycle(tm):
   write(path, enabled=True, order=["alpha-user_created", "bravo-user_created", "charlie-user_created"], next=0)
   module.move_cycle_to("bravo-user_created", path)
   assert module.cycle_theme(advance=False, path=path) == "bravo-user_created"
-  assert module.cycle_theme(advance=True, path=path) == "charlie-user_created"
+  # the picked theme gets its own three start-ups, then the cycle goes on after it
+  assert [module.cycle_theme(advance=True, path=path) for _ in range(4)] == ["bravo-user_created"] * 3 + ["charlie-user_created"]
 
 
 def test_picked_branch_comes_before_the_cycle_and_random():
@@ -152,3 +191,20 @@ def test_pond_allows_the_theme_picker_while_driving():
   assert "for path in (NAVIGATION_API_PATH, THEME_PICKER_API_PATH)" in server
   page = (root / "assets/js/core.js").read_text(encoding="utf-8")
   assert 'viewFromPath() !== "theme_picker"' in page and '"open-theme-picker"' in page
+
+
+def test_pond_picker_offers_only_keiths_themes():
+  from pathlib import Path
+  source = (Path(__file__).resolve().parents[2] / "system/the_pond/theme_picker.py").read_text(encoding="utf-8")
+  assert "keith_theme_groups(ThemeManager.get_full_themes())" in source
+  assert source.count("installed()") >= 3                     # icons, wheels and switching all use the filtered list
+
+
+def test_real_categories_alternate(tm):
+  module, _ = tm
+  keys = [name + "-user_created" for names in module.KEITH_THEME_CATEGORIES.values() for name in names]
+  groups = module.keith_theme_groups(keys)
+  order = module.spread_order(groups)
+  category = {key: name for name, members in groups for key in members}
+  assert sorted(order) == sorted(keys) and order[0] == "paramotor-user_created"
+  assert all(category[a] != category[b] for a, b in zip(order, order[1:]))
