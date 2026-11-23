@@ -32,6 +32,9 @@ Personal FrogPilot fork for Keith's comma 3X in a Toyota Highlander. Never push 
   new theme (RedMan) reaches the comma with a plain Update when the comma is offline. Build it in FrogPilotThemes, copy
   `build/theme_packs/<key>` and its wheel into the bundle. A Python/asset-only release can be made on the PC by running
   `tools/na2/quick_release_on_device.sh` there (python3 -> python, WORK in a scratch folder) and pushing `release:na2`.
+  On Windows also make its `git()` helper pass bytes (`input=data.encode()`, no `text=True`): text mode turns the
+  mktree input into CRLF and renames ~1600 files with a trailing `` (caught before pushing on 2026-11-23). Check that
+  `git diff --stat origin/na2 release` lists only the files you changed before pushing.
 * Navigation Assist is advisory only: it must never publish anything controls, planners, models or lane-change code
   read, never steer/signal/change speed. See `docs/navigation-assist/`.
 * Install branches stay lean: tests and notes are kept out of `na2` by `release/prepare_release.py`.
