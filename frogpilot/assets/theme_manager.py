@@ -28,7 +28,7 @@ KEITH_THEME_CATEGORIES = {
                "storm_front"],
   "Animals": ["honey_badger", "bald_eagle", "flying_squirrel", "hummingbird", "red_fox", "sea_otter", "penguin", "sloth",
               "hedgehog", "raccoon"],
-  "Spooky": ["midnight_horror", "haunted_mansion", "graveyard_fog", "mad_scientist_lab"],
+  "Spooky": ["midnight_horror", "haunted_house", "graveyard_fog", "mad_scientist_lab"],
   "Places": ["aurora", "deep_sea", "desert_highway", "snow_day"],
   "Camping": ["campfire", "lantern_trail", "canoe_lake"],
   "Fun": ["saturday_cartoon", "retro_arcade", "rubber_duck_rally", "synthwave_1984"],
