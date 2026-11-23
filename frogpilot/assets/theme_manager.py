@@ -32,7 +32,7 @@ def own_wheel(key, fallback="stock"):
 # Keith's own themes (SkydiverRedMan/frogpilot-themes), by category. Only these show in the theme pickers, and the
 # test cycle rotates through the categories. A "-user_created" theme missing here still counts, under "More".
 KEITH_THEME_CATEGORIES = {
-  "Aviation": ["paramotor", "paramotor_flight_tracker", "skydive", "tandem_skydive", "drop_zone_sunset", "wingsuit",
+  "Aviation": ["redman", "paramotor", "paramotor_flight_tracker", "skydive", "tandem_skydive", "drop_zone_sunset", "wingsuit",
                "hang_glider", "sunset_glide", "hot_air_balloon", "glass_cockpit", "night_flight", "airshow", "barnstormer",
                "fighter_hud", "helicopter", "seaplane", "bush_pilot", "quadcopter", "rocket_launch", "kite_festival",
                "storm_front"],
@@ -139,6 +139,69 @@ def cycle_status(path=None, packs_path=None):
     following = order[cycle.get("next", 0) % len(order) if isinstance(cycle.get("next"), int) else 0]
   boots = cycle.get("boots", 0) if isinstance(cycle.get("boots"), int) else 0
   return current, max(boots_per_theme(cycle) - boots, 0), following
+
+
+# Keith's themes shipped inside a release (frogpilot/assets/keith_themes), so a new theme reaches the comma with a
+# normal Update even when the PC can't reach the comma. At start-up each bundled theme is copied into /data/themes when
+# it's missing or the bundled copy changed. A theme installed for the first time becomes the cycle's current theme, so
+# the next start-ups show it (3 start-ups, then the cycle goes on).
+KEITH_THEMES_BUNDLE = Path(__file__).resolve().parent / "keith_themes"
+BUNDLE_MARKER = ".keith_bundle"
+
+
+def bundle_signature(folder):
+  import hashlib
+  digest = hashlib.sha256()
+  for path in sorted(folder.rglob("*")):
+    if path.is_file() and path.name != BUNDLE_MARKER:
+      digest.update(str(path.relative_to(folder)).encode())
+      digest.update(path.read_bytes())
+  return digest.hexdigest()
+
+
+def install_bundled_themes(bundle=None, packs=None, wheels=None, cycle_path=None):
+  """Copy bundled themes into /data/themes. Returns the keys installed for the first time."""
+  bundle = Path(bundle or KEITH_THEMES_BUNDLE)
+  packs = Path(packs or frogpilot_paths.THEME_PACKS_PATH)
+  wheels = Path(wheels or frogpilot_paths.STEERING_WHEELS_PATH)
+  new_keys = []
+  if not (bundle / "theme_packs").is_dir():
+    return new_keys
+  for source in sorted((bundle / "theme_packs").iterdir()):
+    if not source.is_dir():
+      continue
+    key = source.name
+    target = packs / key
+    signature = bundle_signature(source)
+    marker = target / BUNDLE_MARKER
+    if marker.is_file() and marker.read_text().strip() == signature:
+      continue
+    first_time = not target.exists()
+    temp = packs / f".{key}.new"
+    shutil.rmtree(temp, ignore_errors=True)
+    packs.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(source, temp)
+    (temp / BUNDLE_MARKER).write_text(signature)
+    shutil.rmtree(target, ignore_errors=True)
+    temp.rename(target)
+    for wheel in (bundle / "steering_wheels").glob(f"{key}.*"):
+      wheels.mkdir(parents=True, exist_ok=True)
+      for old in wheels.glob(f"{key}.*"):
+        old.unlink()
+      shutil.copy2(wheel, wheels / wheel.name)
+    print(f"Installed bundled theme {key}")
+    if first_time:
+      new_keys.append(key)
+  if new_keys:
+    cycle = load_theme_cycle(cycle_path)
+    if cycle is not None:
+      cycle["current"] = new_keys[0]
+      cycle["boots"] = 0
+      try:
+        save_theme_cycle(cycle, cycle_path)
+      except OSError:
+        pass
+  return new_keys
 
 
 # "Switch to this theme now" requests from The Pond's theme picker and the parked long-press on the wheel button.

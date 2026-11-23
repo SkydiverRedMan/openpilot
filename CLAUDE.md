@@ -27,6 +27,11 @@ Personal FrogPilot fork for Keith's comma 3X in a Toyota Highlander. Never push 
 * Theme picker (2026-11-22): The Pond -> Pick a Theme, or hold the driving screen's wheel button 0.8 s while parked.
   Both write `/dev/shm/keith_theme_request`; frogpilot_process applies it (`ThemeManager.apply_picked_theme`), kept until
   the next boot, and the test cycle continues after the picked theme. A normal tap still toggles Experimental Mode.
+* Bundled themes (2026-11-23): themes in `frogpilot/assets/keith_themes/` ship inside the release and are copied to
+  /data/themes at start-up (`install_bundled_themes`); a first-time theme becomes the cycle's current theme. This is how a
+  new theme (RedMan) reaches the comma with a plain Update when the comma is offline. Build it in FrogPilotThemes, copy
+  `build/theme_packs/<key>` and its wheel into the bundle. A Python/asset-only release can be made on the PC by running
+  `tools/na2/quick_release_on_device.sh` there (python3 -> python, WORK in a scratch folder) and pushing `release:na2`.
 * Navigation Assist is advisory only: it must never publish anything controls, planners, models or lane-change code
   read, never steer/signal/change speed. See `docs/navigation-assist/`.
 * Install branches stay lean: tests and notes are kept out of `na2` by `release/prepare_release.py`.

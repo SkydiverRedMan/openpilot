@@ -10,7 +10,7 @@ from openpilot.common.realtime import DT_MDL, Priority, set_realtime_priority
 from openpilot.common.time import system_time_valid
 
 from openpilot.frogpilot.system.model_manager import ModelManager
-from openpilot.frogpilot.assets.theme_manager import THEME_REQUEST_PATH, ThemeManager, take_theme_request
+from openpilot.frogpilot.assets.theme_manager import THEME_REQUEST_PATH, ThemeManager, install_bundled_themes, take_theme_request
 from openpilot.frogpilot.common.frogpilot_api import FrogPilotAPI
 from openpilot.frogpilot.selfdrive.car.toyota.door_control import lock_doors, send_door_command
 from openpilot.frogpilot.selfdrive.navd.map_scheduler import update_maps
@@ -302,6 +302,10 @@ def frogpilot_thread():
   model_manager = ModelManager()
   speed_limit_reader_models = SpeedLimitReaderModels(frogpilot_variables.params)
   theme_manager = ThemeManager(frogpilot_variables.params)
+  try:
+    install_bundled_themes()          # Keith: themes shipped in the release (e.g. RedMan) go to /data/themes
+  except Exception as error:
+    print(f"Bundled themes not installed: {error}")
 
   frogpilot_requests = FrogPilotRequests(model_manager, theme_manager)
 

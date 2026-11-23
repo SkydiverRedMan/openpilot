@@ -213,5 +213,39 @@ def test_real_categories_alternate(tm):
   groups = module.keith_theme_groups(keys)
   order = module.spread_order(groups)
   category = {key: name for name, members in groups for key in members}
-  assert sorted(order) == sorted(keys) and order[0] == "paramotor-user_created"
+  assert sorted(order) == sorted(keys) and order[0] == "redman-user_created"
   assert all(category[a] != category[b] for a, b in zip(order, order[1:]))
+
+
+# ---------- themes bundled in the release ----------
+
+def test_bundled_theme_installs_once_and_becomes_current(tm, tmp_path):
+  module, path = tm
+  bundle = tmp_path / "bundle"
+  (bundle / "theme_packs" / "redman-user_created" / "colors").mkdir(parents=True)
+  (bundle / "theme_packs" / "redman-user_created" / "colors" / "colors.json").write_text("{}")
+  (bundle / "steering_wheels").mkdir()
+  (bundle / "steering_wheels" / "redman-user_created.gif").write_bytes(b"GIF")
+  wheels = tmp_path / "steering_wheels"
+  wheels.mkdir(exist_ok=True)
+  (wheels / "redman-user_created.png").write_bytes(b"old")
+  write(path, enabled=True, current="alpha-user_created", boots=2)
+  kwargs = dict(bundle=bundle, packs=tmp_path / "theme_packs", wheels=wheels, cycle_path=path)
+  assert module.install_bundled_themes(**kwargs) == ["redman-user_created"]
+  assert (tmp_path / "theme_packs" / "redman-user_created" / "colors" / "colors.json").is_file()
+  assert [p.name for p in wheels.glob("redman-user_created.*")] == ["redman-user_created.gif"]
+  saved = json.loads(path.read_text())
+  assert saved["current"] == "redman-user_created" and saved["boots"] == 0
+  # the next start-ups show it three times
+  assert [module.cycle_theme(advance=True, path=path) for _ in range(3)] == ["redman-user_created"] * 3
+  # nothing changes on the next start-up, and an updated bundle is copied again without taking over the cycle
+  assert module.install_bundled_themes(**kwargs) == []
+  (bundle / "theme_packs" / "redman-user_created" / "colors" / "colors.json").write_text('{"x": 1}')
+  assert module.install_bundled_themes(**kwargs) == []
+  assert "x" in (tmp_path / "theme_packs" / "redman-user_created" / "colors" / "colors.json").read_text()
+
+
+def test_process_installs_bundled_themes_at_start():
+  from pathlib import Path
+  source = (Path(__file__).resolve().parents[2] / "frogpilot_process.py").read_text(encoding="utf-8")
+  assert source.index("theme_manager = ThemeManager(") < source.index("install_bundled_themes()")
