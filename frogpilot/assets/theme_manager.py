@@ -16,8 +16,18 @@ THEME_PACK_COMPONENTS = ("colors", "distance_icons", "icons", "signals", "sounds
 
 WHEEL_EXTENSIONS = (".gif", ".png", ".svg")
 
-# Keith: the paramotor wheel is always shown, except during holiday themes and random events (both still change it)
+# Keith: the paramotor wheel (shown with every theme before 2026-11-23, except holidays and random events)
 KEITH_WHEEL = "paramotor"
+# Keith, 2026-11-23, until further notice: every theme shows its own wheel and the paramotor wheel is never used.
+# Set False to go back to the paramotor wheel lock.
+KEITH_THEME_WHEELS = True
+
+
+def own_wheel(key, fallback="stock"):
+  """The theme's own steering wheel ("<name>-animated" themes may use the base theme's), else fallback."""
+  base = key.removesuffix("-animated")
+  names = {p.stem for p in frogpilot_paths.STEERING_WHEELS_PATH.glob("*") if p.is_file()}
+  return key if key in names else base if base in names else fallback
 
 # Keith's own themes (SkydiverRedMan/frogpilot-themes), by category. Only these show in the theme pickers, and the
 # test cycle rotates through the categories. A "-user_created" theme missing here still counts, under "More".
@@ -158,8 +168,7 @@ def picked_theme_mappings(key, theme_wheels):
   base = key.removesuffix("-animated")
   wheel = KEITH_WHEEL
   if theme_wheels:
-    names = {p.stem for p in frogpilot_paths.STEERING_WHEELS_PATH.glob("*") if p.is_file()}
-    wheel = key if key in names else base if base in names else KEITH_WHEEL
+    wheel = own_wheel(key, "stock" if KEITH_THEME_WHEELS else KEITH_WHEEL)
   return {
     "color_scheme": ("colors", base),
     "distance_icons": ("distance_icons", key if (frogpilot_paths.THEME_PACKS_PATH / key / "distance_icons").is_dir() else base),
@@ -668,7 +677,7 @@ class ThemeManager:
       }
     elif self.picked_theme is not None and not boot_run:
       # Picked by hand: stays through drive ends and settings changes until the next boot
-      asset_mappings = picked_theme_mappings(self.picked_theme, theme_wheels=load_theme_cycle() is not None)
+      asset_mappings = picked_theme_mappings(self.picked_theme, theme_wheels=KEITH_THEME_WHEELS or load_theme_cycle() is not None)
     elif (boot_run or randomize_theme) and frogpilot_toggles.random_themes and (cycle_key := cycle_theme(advance=boot_run)):
       asset_mappings = {
         "color_scheme": ("colors", cycle_key),
@@ -703,7 +712,7 @@ class ThemeManager:
         "icon_pack": ("icons", selected_theme),
         "sound_pack": ("sounds", base_theme),
         "turn_signal_pack": ("signals", base_theme),
-        "wheel_image": ("wheel_image", KEITH_WHEEL),  # never randomized
+        "wheel_image": ("wheel_image", own_wheel(selected_theme) if KEITH_THEME_WHEELS else KEITH_WHEEL),
       }
     elif not frogpilot_toggles.random_themes:
       asset_mappings = {
@@ -712,7 +721,9 @@ class ThemeManager:
         "icon_pack": ("icons", frogpilot_toggles.icon_pack),
         "sound_pack": ("sounds", frogpilot_toggles.sound_pack),
         "turn_signal_pack": ("signals", frogpilot_toggles.signal_icons),
-        "wheel_image": ("wheel_image", KEITH_WHEEL)
+        "wheel_image": ("wheel_image", own_wheel(frogpilot_toggles.icon_pack,
+                                                 "stock" if frogpilot_toggles.wheel_image == KEITH_WHEEL else frogpilot_toggles.wheel_image)
+                        if KEITH_THEME_WHEELS else KEITH_WHEEL)
       }
     else:
       return
