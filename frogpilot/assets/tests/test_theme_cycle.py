@@ -84,7 +84,8 @@ def test_without_an_order_the_categories_take_turns(tm, tmp_path):
   for old in ("alpha", "bravo", "charlie"):
     (packs / f"{old}-user_created").rmdir()
   for name in ("paramotor", "skydive", "glass_cockpit", "honey_badger", "sloth", "campfire", "my_new_one"):
-    (packs / f"{name}-user_created").mkdir()
+    for part in ("colors", "sounds"):
+      (packs / f"{name}-user_created" / part).mkdir(parents=True)
   (packs / "tesla").mkdir()                                   # downloaded themes never join the cycle
   write(path, enabled=True)
   seen = [module.cycle_theme(advance=True, path=path) for _ in range(3 * 8)][::3]
@@ -255,7 +256,8 @@ def test_process_installs_bundled_themes_at_start():
 
 def test_photo_themes_have_their_own_category(tm):
   module, _ = tm
-  assert module.KEITH_THEME_CATEGORIES["Photos"] == ["redman", "camping", "travel", "liz", "liz_and_keith", "pets"]
+  assert module.KEITH_THEME_CATEGORIES["Photos"][:6] == ["redman", "camping", "travel", "liz", "liz_and_keith", "pets"]
+  assert {"cruises", "alaska", "lennox", "family", "croatia", "lakes_and_mountains"} <= set(module.KEITH_THEME_CATEGORIES["Photos"])
   assert "redman" not in module.KEITH_THEME_CATEGORIES["Aviation"]
   assert list(module.KEITH_THEME_CATEGORIES)[0] == "Photos"                     # listed first in Pick a Theme
 
@@ -278,7 +280,8 @@ def make_packs(tmp_path, names):
   for old in ("alpha", "bravo", "charlie"):
     (packs / f"{old}-user_created").rmdir()
   for name in names:
-    (packs / f"{name}-user_created").mkdir(parents=True, exist_ok=True)
+    for part in ("colors", "sounds"):
+      (packs / f"{name}-user_created" / part).mkdir(parents=True, exist_ok=True)
   return packs
 
 
@@ -370,7 +373,34 @@ def test_a_deleted_bundled_theme_stays_deleted(tm, tmp_path):
   packs = tmp_path / "theme_packs"
   kwargs = dict(bundle=bundle, packs=packs, wheels=tmp_path / "wheels", cycle_path=path)
   assert module.install_bundled_themes(**kwargs) == ["redman-user_created"]
-  shutil.rmtree(packs / "redman-user_created" / "colors")        # deleted in The Pond: parts removed, marker left
-  assert module.install_bundled_themes(**kwargs) == []
-  assert not (packs / "redman-user_created").exists()            # no blank leftover in the cycle
-  assert module.install_bundled_themes(**kwargs) == [] and not (packs / "redman-user_created").exists()   # not brought back
+  # deleting the whole theme (only the marker left) keeps it deleted, with no blank leftover
+  for part in ("colors", "sounds"):
+    shutil.rmtree(packs / "redman-user_created" / part)
+  assert module.install_bundled_themes(**kwargs) == [] and not (packs / "redman-user_created").exists()
+  assert module.install_bundled_themes(**kwargs) == [] and not (packs / "redman-user_created").exists()
+
+
+def test_deleting_one_part_leaves_the_rest_alone(tm, tmp_path):
+  import shutil
+  module, path = tm
+  bundle = _bundle(tmp_path)
+  packs = tmp_path / "theme_packs"
+  kwargs = dict(bundle=bundle, packs=packs, wheels=tmp_path / "wheels", cycle_path=path)
+  module.install_bundled_themes(**kwargs)
+  shutil.rmtree(packs / "redman-user_created" / "sounds")
+  module.install_bundled_themes(**kwargs)
+  assert (packs / "redman-user_created" / "colors").is_dir() and not (packs / "redman-user_created" / "sounds").exists()
+  assert "redman-user_created" not in module.installed_keith_themes(packs)     # half a theme never joins the cycle
+
+
+def test_an_interrupted_update_finishes_next_boot(tm, tmp_path):
+  import shutil
+  module, path = tm
+  bundle = _bundle(tmp_path)
+  packs = tmp_path / "theme_packs"
+  kwargs = dict(bundle=bundle, packs=packs, wheels=tmp_path / "wheels", cycle_path=path)
+  module.install_bundled_themes(**kwargs)
+  shutil.copytree(packs / "redman-user_created", packs / ".redman-user_created.new")
+  shutil.rmtree(packs / "redman-user_created")                 # power lost between removing the old copy and the rename
+  module.install_bundled_themes(**kwargs)
+  assert (packs / "redman-user_created" / "colors").is_dir()

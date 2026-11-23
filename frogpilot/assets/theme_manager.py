@@ -32,7 +32,8 @@ def own_wheel(key, fallback="stock"):
 # Keith's own themes (SkydiverRedMan/frogpilot-themes), by category. Only these show in the theme pickers, and the
 # test cycle rotates through the categories. A "-user_created" theme missing here still counts, under "More".
 KEITH_THEME_CATEGORIES = {
-  "Photos": ["redman", "camping", "travel", "liz", "liz_and_keith", "pets"],      # made from Keith's own photos
+  "Photos": ["redman", "camping", "travel", "liz", "liz_and_keith", "pets", "cruises", "alaska", "lennox", "ronnie", "family",
+             "croatia", "lakes_and_mountains"],                                       # made from Keith's own photos
   "Aviation": ["paramotor", "paramotor_flight_tracker", "skydive", "tandem_skydive", "drop_zone_sunset", "wingsuit",
                "hang_glider", "sunset_glide", "hot_air_balloon", "glass_cockpit", "night_flight", "airshow", "barnstormer",
                "fighter_hud", "helicopter", "seaplane", "bush_pilot", "quadcopter", "rocket_launch", "kite_festival",
@@ -130,8 +131,11 @@ def cycle_mode(cycle):
 
 
 def installed_keith_themes(packs_path=None):
+  """Theme folders with colors and sounds (a folder left half-deleted never joins the cycle)."""
   packs = Path(packs_path or frogpilot_paths.THEME_PACKS_PATH)
-  return [path.name for path in packs.glob("*") if path.is_dir()] if packs.is_dir() else []
+  if not packs.is_dir():
+    return []
+  return [p.name for p in packs.glob("*") if p.is_dir() and (p / "colors").is_dir() and (p / "sounds").is_dir()]
 
 
 def chosen_groups(cycle, packs_path=None):
@@ -309,13 +313,15 @@ def install_bundled_themes(bundle=None, packs=None, wheels=None, cycle_path=None
       bundled_wheels = list((bundle / "steering_wheels").glob(f"{key}.*"))
       signature = bundle_signature(source, bundled_wheels)
       complete = (target / "colors").is_dir() and (target / "sounds").is_dir()
-      if key in state:
-        if not complete:
-          # Installed before and now gone or emptied: Keith deleted it. Clear what's left so it can't linger as a
-          # blank theme in the cycle, and don't bring it back.
-          if target.exists():
-            shutil.rmtree(target, ignore_errors=True)
+      anything_left = target.is_dir() and any(p.name != BUNDLE_MARKER for p in target.iterdir())
+      interrupted = (packs / f".{key}.new").exists()   # an update stopped between removing the old copy and renaming
+      if key in state and not interrupted:
+        if not anything_left:
+          # The whole theme was deleted (only the marker, or nothing, is left): it stays deleted.
+          shutil.rmtree(target, ignore_errors=True)
           continue
+        if not complete:
+          continue                                   # a part was deleted on purpose: leave the theme as Keith set it
         if state[key] == signature:
           continue
       first_time = key not in state and not complete
