@@ -54,6 +54,8 @@ FIELD_MAP = {
   "adjacent_lane_right": "adjacentLaneRight",
   "mapbox_lane_count": "mapboxLaneCount",
   "mapbox_active_lanes": "mapboxActiveLanes",
+  "voice_prompt": "voicePrompt",
+  "voice_prompt_count": "voicePromptCount",
 }
 
 
@@ -107,6 +109,7 @@ class NavigationAssistDaemon:
     self.enabled = False
     self.destination_set = False
     self.is_metric = False
+    self.voice_enabled = False
     self.last_param_poll = -1e9
     self.enable_bsm = False
     self.last_car_params_poll = -1e9
@@ -126,6 +129,7 @@ class NavigationAssistDaemon:
     self.enabled = self.params.get_bool("NavigationAssist")
     self.destination_set = bool(self.params.get("NavDestination"))
     self.is_metric = self.params.get_bool("IsMetric")
+    self.voice_enabled = self.params.get_bool("NavigationAssistVoice")
 
     if now - self.last_car_params_poll >= CAR_PARAMS_POLL_INTERVAL:
       self.last_car_params_poll = now
@@ -219,6 +223,7 @@ class NavigationAssistDaemon:
       nav_updated=nav_updated,
       position_valid=position_valid,
       is_metric=self.is_metric,
+      voice_enabled=self.voice_enabled,
       **lane,
     ))
 

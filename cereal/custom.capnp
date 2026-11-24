@@ -372,6 +372,9 @@ struct NavigationAssist @0x9ee1e6b43b301f89 {
   adjacentLaneRight @19 :Bool;      # camera sees a lane to the right
   mapboxLaneCount @20 :UInt8;       # lanes in Mapbox's lane guidance for this maneuver (0 = none)
   mapboxActiveLanes @21 :UInt8;     # of those, lanes usable for the maneuver
+  # Spoken prompts (off by default: NavigationAssistVoice); soundd plays voicePrompt when voicePromptCount changes
+  voicePrompt @22 :Text;            # phrase id, a file in frogpilot/assets/navigation_voice
+  voicePromptCount @23 :UInt32;
 
   enum State @0xb5717a8b6d7ce21e {
     disabled @0;

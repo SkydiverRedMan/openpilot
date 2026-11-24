@@ -414,6 +414,7 @@ std::unordered_map<std::string, uint32_t> keys = {
     {"ModelUI", PERSISTENT},
     {"ModelVersions", PERSISTENT},
     {"NavigationAssist", PERSISTENT},
+    {"NavigationAssistVoice", PERSISTENT},
     {"NavigationAssistSynthetic", CLEAR_ON_MANAGER_START | DONT_LOG},
     {"NavigationUI", PERSISTENT},
     {"NewLongAPI", PERSISTENT},

@@ -103,7 +103,31 @@ CONSISTENCY_SLACK = 60.0       # m of disagreement between navd and odometry tol
 
 # Milestone 2: lane position
 MIN_ADJACENT_LANE_WIDTH = 2.5  # m; FrogPilot's lane width estimate reads 0 when no lane is beside the car
-LANE_STATE_HOLD = 1.0          # s the camera's lane estimate must agree before the advice changes
+# Milestone 3 (2026-11-24, from Keith's real drives): the camera's "is there a lane beside me" flickers near exits
+# (shoulders, an exit lane starting to open), and with a 1 s hold the advice flipped MOVE RIGHT <-> IN EXIT LANE about
+# 10 times in the last 2 miles before Exit 653. So: a lane must be seen for longer before it counts, lane advice stays
+# up for a minimum time, and near an exit a lane opening on that side is announced once as the exit lane opening.
+LANE_APPEAR_HOLD = 3.0         # s a lane must be seen before it counts
+LANE_VANISH_HOLD = 2.0         # s a lane must be gone before it stops counting
+LANE_ADVICE_MIN_SHOW = 8.0     # s a piece of lane advice stays up before it can change (traffic warnings excepted)
+EXIT_OPENING_DISTANCE = 800.0  # m (~1/2 mi) before an exit where a lane appearing on that side is the exit lane
+
+# Spoken prompts (2026-11-24, off by default: NavigationAssistVoice). Short, calm phrases from
+# frogpilot/assets/navigation_voice; soundd plays one only while no openpilot/FrogPilot alert is sounding. At most one
+# "coming up" prompt per maneuver and one per new piece of lane advice; never anything about traffic.
+VOICE_MIN_GAP = 6.0            # s between two prompts
+VOICE_MIN_DISTANCE = 30.0      # m: closer than this to the maneuver nothing is said
+VOICE_MIN_SECONDS = 4.0        # s: nor when the maneuver is less than this far away at the current speed
+VOICE_AHEAD = {                # (kind, side) -> phrase when the maneuver starts approaching
+  (KIND_EXIT, "right"): "exit_right_ahead", (KIND_EXIT, "left"): "exit_left_ahead",
+  (KIND_TURN, "right"): "turn_right_ahead", (KIND_TURN, "left"): "turn_left_ahead",
+  (KIND_FORK, "right"): "keep_right_ahead", (KIND_FORK, "left"): "keep_left_ahead",
+  (KIND_ON_RAMP, "right"): "ramp_right_ahead", (KIND_ON_RAMP, "left"): "ramp_left_ahead",
+}
+VOICE_PHRASES = {"exit_right_ahead", "exit_left_ahead", "turn_right_ahead", "turn_left_ahead", "keep_right_ahead",
+                 "keep_left_ahead", "ramp_right_ahead", "ramp_left_ahead", "move_right_exit", "move_left_exit",
+                 "move_right_turn", "move_left_turn", "exit_lane_opening_right", "exit_lane_opening_left", "stay_in_lane",
+                 "any_lane"}
 RADAR_ALONGSIDE_DISTANCE = 15.0  # m; adjacent-lane radar target this close counts as alongside
 LANE_ADVICE_KINDS = {KIND_EXIT, KIND_FORK, KIND_TURN, KIND_ON_RAMP}
 
@@ -183,6 +207,7 @@ class EngineInputs:
   blindspot_right: bool = False
   radar_left_alongside: bool = False  # radar target in the left lane within RADAR_ALONGSIDE_DISTANCE
   radar_right_alongside: bool = False
+  voice_enabled: bool = False         # NavigationAssistVoice param: spoken prompts
 
 
 @dataclass
@@ -202,6 +227,8 @@ class Advisory:
   route_changed: bool = False
   route_change_count: int = 0
   navigation_age: float = -1.0
+  voice_prompt: str = ""              # phrase id of the newest spoken prompt ("" = none yet)
+  voice_prompt_count: int = 0         # goes up by one for every new prompt; soundd plays a prompt when it changes
   lane_info_available: bool = False
   blindspot_available: bool = False
   adjacent_lane_left: bool = False
@@ -319,13 +346,26 @@ class NavigationAssistEngine:
 
     # debounced camera lane estimate: side -> (current bool, candidate bool, candidate since)
     self.lane_seen = {"left": [None, None, 0.0], "right": [None, None, 0.0]}
+    # the maneuver for which "EXIT LANE OPENING" was announced (kept until that maneuver is passed)
+    self.exit_opening_for: tuple | None = None
+    self.lane_shown: tuple = (None, URGENCY_APPROACHING, "", "")   # the lane advice currently on screen
+    self.maneuver_key: tuple | None = None   # the maneuver being shown, identified by where it is on the route
+    if not hasattr(self, "voice_count"):
+      self.voice_count = 0                   # keeps counting across resets so soundd never misses a new prompt
+      self.voice_phrase = ""
+    self.voice_spoken: set = set()           # (maneuver key, phrase) already said
+    self.voice_pending: str | None = None
+    self.voice_last_at = -1e9
+    self.voice_odometer = 0.0                # m driven, to tell a re-announced maneuver from the next one
+    self.voice_odometer_at: float | None = None
+    self.voice_said_for: dict = {}           # phrase -> (odometer, maneuver distance) when it was last said
 
   # ---- helpers ----------------------------------------------------------
 
-  def _set_state(self, state: str, now: float, urgent: bool = False) -> str:
+  def _set_state(self, state: str, now: float, urgent: bool = False, dwell: float = MIN_STATE_DWELL) -> str:
     if state == self.state:
       return self.state
-    if not urgent and (now - self.state_since) < MIN_STATE_DWELL:
+    if not urgent and (now - self.state_since) < dwell:
       return self.state
     self.state = state
     self.state_since = now
@@ -406,7 +446,7 @@ class NavigationAssistEngine:
     return 0
 
   def _debounced_lane(self, side: str, exists: bool, now: float) -> bool | None:
-    """Only report a change in 'is there a lane on this side' after it held for LANE_STATE_HOLD."""
+    """Only report a change in 'is there a lane on this side' after it held (LANE_APPEAR_HOLD / LANE_VANISH_HOLD)."""
     current, candidate, since = self.lane_seen[side]
     if current is None:
       self.lane_seen[side] = [exists, exists, now]
@@ -417,7 +457,7 @@ class NavigationAssistEngine:
     if candidate != exists:
       self.lane_seen[side] = [current, exists, now]
       return current
-    if now - since >= LANE_STATE_HOLD:
+    if now - since >= (LANE_APPEAR_HOLD if exists else LANE_VANISH_HOLD):
       self.lane_seen[side] = [exists, exists, now]
       return exists
     return current
@@ -436,7 +476,7 @@ class NavigationAssistEngine:
     return f"{n} of {len(lanes)} lanes"
 
   def _lane_advice(self, inputs: EngineInputs, nav: NavSnapshot, kind: str, direction: str, out: Advisory,
-                   detail: str) -> tuple[str, int, str, str] | None:
+                   detail: str, distance: float = 0.0, maneuver_key: tuple | None = None) -> tuple[str, int, str, str] | None:
     """Milestone 2: return (state, urgency, headline, detail) or None for no lane advice."""
     side = "left" if direction in LEFT_DIRECTIONS else "right" if direction in RIGHT_DIRECTIONS else None
     if side is None or kind not in LANE_ADVICE_KINDS:
@@ -449,14 +489,43 @@ class NavigationAssistEngine:
     def join(*parts):
       return " · ".join(p for p in parts if p)
 
+    # Mapbox says every lane can take this maneuver: there is nothing to move for.
+    if nav.lanes_active and all(nav.lanes_active) and len(nav.lanes_active) > 1:
+      return ALREADY_POSITIONED, URGENCY_APPROACHING, "ANY LANE", join(base, "every lane can take it")
+
     if not inputs.lane_info_valid:
       # Only worth saying when lane data would normally exist; at city speeds FrogPilot doesn't estimate lanes.
       return None, None, None, join(base, "lane position unknown") if inputs.lane_info_expected else base
 
     width = inputs.lane_width_left if side == "left" else inputs.lane_width_right
     lane_on_side = self._debounced_lane(side, width >= MIN_ADJACENT_LANE_WIDTH, inputs.now)
+    other = "right" if side == "left" else "left"
+    other_width = inputs.lane_width_right if side == "left" else inputs.lane_width_left
+    lane_on_other = self._debounced_lane(other, other_width >= MIN_ADJACENT_LANE_WIDTH, inputs.now)
+
+    # Mapbox first: on a two-lane road, the lane on the *other* side tells which lane the car is in, which the camera's
+    # view of the exit side can't (near exits a shoulder often measures as wide as a lane: 2.2-3.2 m on Keith's drives).
+    lanes = nav.lanes_active
+    if len(lanes) == 2 and lane_on_other is not None:
+      target = lanes[-1] if side == "right" else lanes[0]     # is the lane on the maneuver side the one to use?
+      if target and not all(lanes):
+        lane_on_side = not lane_on_other                     # a lane on the other side: already in the exit-side lane
     out.adjacent_lane_left = bool(self.lane_seen["left"][0]) if self.lane_seen["left"][0] is not None else inputs.lane_width_left >= MIN_ADJACENT_LANE_WIDTH
     out.adjacent_lane_right = bool(self.lane_seen["right"][0]) if self.lane_seen["right"][0] is not None else inputs.lane_width_right >= MIN_ADJACENT_LANE_WIDTH
+
+    # Near an exit, once the driver was in the outside lane, a lane appearing on that side is the exit lane opening:
+    # say so once and keep it (no bouncing back to "in exit lane" when the camera loses it for a moment).
+    near_exit = kind == KIND_EXIT and distance <= EXIT_OPENING_DISTANCE
+    if self.exit_opening_for is not None and self.exit_opening_for != maneuver_key:
+      self.exit_opening_for = None
+    if near_exit and (self.exit_opening_for == maneuver_key or (lane_on_side and self.state == ALREADY_POSITIONED)):
+      self.exit_opening_for = maneuver_key
+      blindspot = inputs.blindspot_left if side == "left" else inputs.blindspot_right
+      radar = inputs.radar_left_alongside if side == "left" else inputs.radar_right_alongside
+      if lane_on_side and (blindspot or radar):
+        return TRAFFIC_DETECTED, URGENCY_TRAFFIC, f"VEHICLE ON {word}", join("wait", base)
+      return (PREPARE_LEFT if side == "left" else PREPARE_RIGHT), URGENCY_IMMINENT, "EXIT LANE OPENING", \
+        join(base, f"move {side} when clear")
 
     if not lane_on_side:
       positioned = "IN EXIT LANE" if kind == KIND_EXIT else f"IN {word} LANE"
@@ -474,9 +543,72 @@ class NavigationAssistEngine:
     return (PREPARE_LEFT if side == "left" else PREPARE_RIGHT), \
       (URGENCY_IMMINENT if self.band >= 2 else URGENCY_APPROACHING), headline, join(lanes_text and f"use {lanes_text}", base, mirrors)
 
+  # ---- spoken prompts ----------------------------------------------------
+
+  def _voice_for(self, out: Advisory) -> str | None:
+    """The phrase this advisory calls for, or None."""
+    side = "left" if out.direction in LEFT_DIRECTIONS else "right" if out.direction in RIGHT_DIRECTIONS else None
+    if side is None:
+      return None
+    if out.state in (PREPARE_LEFT, PREPARE_RIGHT):
+      if out.headline == "EXIT LANE OPENING":
+        return f"exit_lane_opening_{side}"
+      return f"move_{side}_{'turn' if out.kind == KIND_TURN else 'exit'}"
+    if out.state == ALREADY_POSITIONED:
+      return "any_lane" if out.headline == "ANY LANE" else "stay_in_lane"
+    if out.state in (MANEUVER_APPROACHING, MANEUVER_IMMINENT):
+      return VOICE_AHEAD.get((out.kind, side))
+    return None
+
+  def _voice(self, inputs: EngineInputs, out: Advisory) -> None:
+    out.voice_prompt, out.voice_prompt_count = self.voice_phrase, self.voice_count
+    if self.voice_odometer_at is not None:
+      self.voice_odometer += max(inputs.v_ego, 0.0) * min(max(inputs.now - self.voice_odometer_at, 0.0), 1.0)
+    self.voice_odometer_at = inputs.now
+    if not inputs.voice_enabled or not out.display_visible or self.maneuver_key is None:
+      self.voice_pending = None
+      return
+    if out.maneuver_distance < max(VOICE_MIN_DISTANCE, inputs.v_ego * VOICE_MIN_SECONDS):
+      self.voice_pending = None            # too close to the maneuver: a prompt now would only distract
+      return
+    for phrase, (odometer, distance) in self.voice_said_for.items():
+      if self.voice_odometer - odometer < distance - VOICE_MIN_DISTANCE:
+        # the maneuver this phrase was said for is still ahead: a route update renamed it, don't repeat it
+        self.voice_spoken.add((self.maneuver_key, phrase))
+    wanted = self._voice_for(out)
+    if out.state == TRAFFIC_DETECTED:
+      self.voice_pending = None            # never say "move" (or anything about lanes) while a car is alongside
+    ahead = VOICE_AHEAD.get((out.kind, "left" if out.direction in LEFT_DIRECTIONS else "right"))
+    if ahead and (self.maneuver_key, ahead) not in self.voice_spoken and out.state in (
+        MANEUVER_APPROACHING, MANEUVER_IMMINENT, PREPARE_LEFT, PREPARE_RIGHT, ALREADY_POSITIONED, TRAFFIC_DETECTED):
+      # announce the maneuver itself first, then the lane advice once the gap has passed
+      self.voice_pending = wanted if wanted != ahead else None
+      wanted = ahead
+    elif wanted is None or (self.maneuver_key, wanted) in self.voice_spoken:
+      wanted = self.voice_pending
+    if out.state == TRAFFIC_DETECTED and wanted != ahead:
+      wanted = None
+    if wanted is None or wanted not in VOICE_PHRASES or inputs.now - self.voice_last_at < VOICE_MIN_GAP:
+      if wanted is not None and wanted != self.voice_pending and (self.maneuver_key, wanted) not in self.voice_spoken:
+        self.voice_pending = wanted
+      return
+    self.voice_spoken.add((self.maneuver_key, wanted))
+    self.voice_said_for[wanted] = (self.voice_odometer, out.maneuver_distance)
+    if self.voice_pending == wanted:
+      self.voice_pending = None
+    self.voice_last_at = inputs.now
+    self.voice_count += 1
+    self.voice_phrase = wanted
+    out.voice_prompt, out.voice_prompt_count = self.voice_phrase, self.voice_count
+
   # ---- main entry -------------------------------------------------------
 
   def update(self, inputs: EngineInputs) -> Advisory:
+    out = self._update(inputs)
+    self._voice(inputs, out)
+    return out
+
+  def _update(self, inputs: EngineInputs) -> Advisory:
     now = inputs.now
     out = Advisory(enabled=inputs.enabled, route_change_count=self.route_change_count)
 
@@ -531,6 +663,7 @@ class NavigationAssistEngine:
       return out
 
     maneuver, kind, direction, is_current = picked
+    self.maneuver_key = (kind, direction, round((nav.distance_remaining - maneuver.distance) / 200.0))
     out.lane_info_available = inputs.lane_info_valid
     out.blindspot_available = inputs.blindspot_available
     if is_current:
@@ -587,23 +720,36 @@ class NavigationAssistEngine:
 
     # Milestone 2: lane advice once the maneuver is approaching
     if self.band >= 1:
-      advice = self._lane_advice(inputs, nav, kind, direction, out, out.detail)
+      advice = self._lane_advice(inputs, nav, kind, direction, out, out.detail, distance,
+                                 (kind, direction, round((nav.distance_remaining - maneuver.distance) / 200.0)))   # where it is on the route
       if advice is not None:
         lane_state, lane_urgency, lane_headline, lane_detail = advice
         out.detail = lane_detail
         if lane_state is not None:
           # Traffic warnings appear at once; everything else among lane states also switches at once
           # (the lane estimate is already debounced), except leaving a traffic warning, which waits.
-          urgent = not (self.state == TRAFFIC_DETECTED and lane_state != TRAFFIC_DETECTED)
-          out.state = self._set_state(lane_state, now, urgent=urgent)
+          # Traffic warnings appear at once; a first piece of lane advice appears at once; after that, lane advice
+          # changes only once the current one has been up for LANE_ADVICE_MIN_SHOW (no flip-flopping).
+          lane_states = (PREPARE_LEFT, PREPARE_RIGHT, ALREADY_POSITIONED, TRAFFIC_DETECTED)
+          if lane_state == TRAFFIC_DETECTED:
+            urgent, dwell = True, MIN_STATE_DWELL
+          elif self.state == TRAFFIC_DETECTED:
+            urgent, dwell = False, MIN_STATE_DWELL
+          elif self.state in lane_states:
+            urgent, dwell = False, LANE_ADVICE_MIN_SHOW
+          else:
+            urgent, dwell = True, MIN_STATE_DWELL
+          out.state = self._set_state(lane_state, now, urgent=urgent, dwell=dwell)
           if out.state == lane_state:
             out.urgency = lane_urgency
             out.headline = lane_headline
+            self.lane_shown = (lane_state, lane_urgency, lane_headline, lane_detail)
             return out
-          if out.state in (PREPARE_LEFT, PREPARE_RIGHT, ALREADY_POSITIONED, TRAFFIC_DETECTED):
-            # still holding the previous lane state during its dwell time
-            out.urgency = URGENCY_TRAFFIC if out.state == TRAFFIC_DETECTED else URGENCY_APPROACHING
-            out.headline = f"VEHICLE ON {side_word(direction)}" if out.state == TRAFFIC_DETECTED else lane_headline
+          if out.state in lane_states:
+            # still holding the previous lane advice during its minimum show time: keep showing *that* advice
+            out.urgency = URGENCY_TRAFFIC if out.state == TRAFFIC_DETECTED else self.lane_shown[1]
+            out.headline = self.lane_shown[2]
+            out.detail = self.lane_shown[3]
             return out
 
     # Moving toward more urgency is immediate; relaxing waits for the dwell time.

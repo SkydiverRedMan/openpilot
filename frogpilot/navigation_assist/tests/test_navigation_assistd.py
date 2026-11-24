@@ -50,7 +50,7 @@ def nav_msg(distance, mtype="off ramp", modifier="slight right", text="Exit 45",
                SimpleNamespace(distance=distance + 1000, type="arrive", modifier="right")]
   return SimpleNamespace(maneuverDistance=distance, maneuverType=mtype, maneuverModifier=modifier,
                          maneuverPrimaryText=text, maneuverSecondaryText="", distanceRemaining=remaining or distance + 1000,
-                         allManeuvers=maneuvers, lanes=[SimpleNamespace(active=a) for a in (False, True)])
+                         allManeuvers=maneuvers, lanes=[SimpleNamespace(active=a) for a in (False, False, True)])   # 3 lanes, exit from the right one
 
 
 class FakeSubMaster:

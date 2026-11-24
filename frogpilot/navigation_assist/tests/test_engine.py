@@ -485,9 +485,51 @@ def test_lane_estimate_is_debounced():
   assert d.step(nav(2500), v=30).state == E.PREPARE_RIGHT
   d.lane["lane_width_right"] = 0.0   # now it stays gone: driver moved over
   out = None
-  for _ in range(int(E.LANE_STATE_HOLD / 0.2) + 2):
+  for _ in range(int((E.LANE_ADVICE_MIN_SHOW + E.LANE_VANISH_HOLD) / 0.2) + 2):
     out = d.step(nav(2500), v=30)
   assert out.state == E.ALREADY_POSITIONED
+
+
+def test_flickering_lane_does_not_flip_the_advice():
+  """Keith's Exit 653 (2026-11-21): the camera saw a lane on the right on and off every few seconds; the advice used
+  to flip MOVE RIGHT / IN EXIT LANE about 10 times in 2 miles. Now it stays put."""
+  d = Driver()
+  d.lane = dict(LANES_LEFT_ONLY) if "LANES_LEFT_ONLY" in globals() else dict(LANES_BOTH, lane_width_right=0.0)
+  out = approach(d, distance=3000)
+  assert out.state == E.ALREADY_POSITIONED
+  states = []
+  for k in range(200):                                  # 40 s: a lane appears for 2 s out of every 5
+    d.lane["lane_width_right"] = 3.6 if (k % 25) < 10 else 0.0
+    states.append(d.step(nav(3000 - k * 6), v=30).state)
+  changes = sum(1 for a, b in zip(states, states[1:]) if a != b)
+  assert changes == 0, changes
+
+
+def test_exit_lane_opening_is_announced_once():
+  d = Driver()
+  d.lane = dict(LANES_BOTH, lane_width_right=0.0)        # already in the right lane
+  out = approach(d, distance=1500)
+  assert out.state == E.ALREADY_POSITIONED
+  for k in range(60):                                    # inside half a mile, the exit lane opens and stays
+    d.lane["lane_width_right"] = 3.6
+    out = d.step(nav(700 - k * 6), v=30)
+  assert out.headline == "EXIT LANE OPENING"
+  seen = []
+  for k in range(40):                                    # the camera loses it now and then: still the same advice
+    d.lane["lane_width_right"] = 0.0 if k % 7 == 0 else 3.6
+    seen.append(d.step(nav(340 - k * 6), v=30).headline)
+  assert set(seen) == {"EXIT LANE OPENING"}
+
+
+def test_any_lane_when_mapbox_says_all_lanes_work():
+  d = Driver()
+  d.lane = dict(LANES_BOTH)
+  n = nav(2500)
+  n.lanes_active = [True, True, True]
+  out = None
+  for _ in range(10):
+    out = d.step(n, v=30)
+  assert out.headline == "ANY LANE"
 
 
 def test_imminent_move_is_orange():

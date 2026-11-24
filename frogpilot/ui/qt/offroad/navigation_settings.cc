@@ -194,6 +194,13 @@ FrogPilotNavigationPanel::FrogPilotNavigationPanel(FrogPilotSettingsWindow *pare
   });
   settingsList->addItem(navigationAssistToggle);
 
+  navigationAssistVoiceToggle = new ParamControl("NavigationAssistVoice", tr("Navigation Assist: Spoken Prompts"),
+                                                 tr("<b>Says short prompts out loud, like \"Exit on the right, coming up\" and \"Move right for your exit\".</b><br><br>"
+                                                    "At most one prompt when a maneuver is coming up and one when the lane advice changes, at least 6 seconds apart. "
+                                                    "Never about traffic. A prompt only plays while no openpilot alert is sounding, and any alert cuts it off."),
+                                                 "");
+  settingsList->addItem(navigationAssistVoiceToggle);
+
   ScrollView *settingsPanel = new ScrollView(settingsList, this);
   primelessLayout->addWidget(settingsPanel);
 
@@ -208,6 +215,7 @@ FrogPilotNavigationPanel::FrogPilotNavigationPanel(FrogPilotSettingsWindow *pare
   toggles["MapboxSecretKey"] = secretMapboxKeyControl;
   toggles["MapboxSetup"] = setupButton;
   toggles["NavigationAssist"] = navigationAssistToggle;
+  toggles["NavigationAssistVoice"] = navigationAssistVoiceToggle;
   toggles["SearchInput"] = searchProviderControl;
   toggles["SpeedLimitFiller"] = speedLimitFillerToggle;
   toggles["ThePondPairing"] = pairingToggle;
@@ -228,6 +236,7 @@ void FrogPilotNavigationPanel::showEvent(QShowEvent *event) {
   setupCompleted = mapboxPublicKeySet && mapboxSecretKeySet;
 
   navigationAssistToggle->setVisible(parent->tuningLevel >= parent->frogpilotToggleLevels.value("NavigationAssist").toDouble());
+  navigationAssistVoiceToggle->setVisible(parent->tuningLevel >= parent->frogpilotToggleLevels.value("NavigationAssistVoice").toDouble());
   pairingToggle->setVisible(parent->tuningLevel >= parent->frogpilotToggleLevels.value("ThePondPairing").toDouble());
   speedLimitFillerToggle->setVisible(parent->tuningLevel >= parent->frogpilotToggleLevels.value("SpeedLimitFiller").toDouble());
 }
