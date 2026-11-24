@@ -37,7 +37,7 @@ log "Release $BASE (source $OLD_SOURCE) + $SOURCE_BRANCH $NEW_SOURCE"
 
 COMPILED='\.(c|cc|cpp|h|hpp|pyx|pxd|capnp|qrc|ts|dbc|onnx|pkl|so|a|o)$|(^|/)SCons(cript|truct)$|^(cereal|panda|opendbc|third_party|tinygrad_repo|msgq_repo|rednose_repo|body)/|^common/params|^selfdrive/ui/|^frogpilot/ui/'
 CHANGES="$(git diff --name-status --no-renames "$OLD_SOURCE" "$NEW_SOURCE")"
-BLOCKED="$(echo "$CHANGES" | cut -f2 | grep -E "$COMPILED" || true)"
+BLOCKED="$(echo "$CHANGES" | cut -f2 | grep -E "$COMPILED" | grep -vE '^selfdrive/ui/[^/]+\.py$' || true)"   # soundd.py & co. are plain Python
 if [ -n "$BLOCKED" ]; then
   log "These changes need compiling; run build_on_device.sh instead:"
   echo "$BLOCKED"
