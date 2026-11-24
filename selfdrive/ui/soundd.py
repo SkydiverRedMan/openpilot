@@ -122,6 +122,7 @@ class Soundd:
     self.frogpilot_toggles = frogpilot_variables.get_frogpilot_toggles()
 
     self.sound_source = None
+    self.startup_sound_file = ""
 
     self.nav_voices = load_nav_voices()
     self.nav_voice: np.ndarray | None = None   # the prompt being spoken
@@ -143,23 +144,27 @@ class Soundd:
 
       if sound == FrogPilotAudibleAlert.startup and KEITH_STARTUP_SOUND.exists():
         # Keith: his Woo Hoo greets every start-up (after the paramotor boot picture); every other sound is the theme's
-        wavefile = wave.open(str(KEITH_STARTUP_SOUND), 'r')
+        path = str(KEITH_STARTUP_SOUND)
       elif random_events_path.exists():
         goat_scream = sound == FrogPilotAudibleAlert.goat and self.frogpilot_toggles.goat_scream_alert
         if not self.frogpilot_toggles.random_events and not goat_scream:
           continue
 
-        wavefile = wave.open(str(random_events_path), 'r')
+        path = str(random_events_path)
       elif sounds_path.exists():
-        wavefile = wave.open(str(sounds_path), 'r')
+        path = str(sounds_path)
       else:
         if filename == "startup.wav":
           filename = "engage.wav"
-        wavefile = wave.open(BASEDIR + "/selfdrive/assets/sounds/" + filename, 'r')
+        path = BASEDIR + "/selfdrive/assets/sounds/" + filename
+      wavefile = wave.open(path, 'r')
 
       assert wavefile.getnchannels() == 1
       assert wavefile.getsampwidth() == 2
       assert wavefile.getframerate() == SAMPLE_RATE
+
+      if sound == FrogPilotAudibleAlert.startup:
+        self.startup_sound_file = path
 
       length = wavefile.getnframes()
       loaded_sounds[sound] = np.frombuffer(wavefile.readframes(length), dtype=np.int16).astype(np.float32) / (2**16/2)
@@ -233,6 +238,8 @@ class Soundd:
     if self.current_alert != new_alert and (new_alert != AudibleAlert.none or current_alert_played_once):
       self.current_alert = new_alert
       self.current_sound_frame = 0
+      if new_alert == FrogPilotAudibleAlert.startup:   # Keith: proof in the log that the start-up sound played
+        cloudlog.info(f"keith startup sound playing: {self.startup_sound_file}")
 
   def get_audible_alert(self, sm):
     # FrogPilot variables
