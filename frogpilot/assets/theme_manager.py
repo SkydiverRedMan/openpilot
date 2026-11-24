@@ -32,6 +32,8 @@ def own_wheel(key, fallback="stock"):
 # Keith's own themes (SkydiverRedMan/frogpilot-themes), by category. Only these show in the theme pickers, and the
 # test cycle rotates through the categories. A "-user_created" theme missing here still counts, under "More".
 KEITH_THEME_CATEGORIES = {
+  "Photos": ["redman", "camping", "travel", "liz", "liz_and_keith", "pets", "cruises", "alaska", "lennox", "ronnie", "family",
+             "croatia", "lakes_and_mountains"],                                       # made from Keith's own photos
   "Aviation": ["paramotor", "paramotor_flight_tracker", "skydive", "tandem_skydive", "drop_zone_sunset", "wingsuit",
                "hang_glider", "sunset_glide", "hot_air_balloon", "glass_cockpit", "night_flight", "airshow", "barnstormer",
                "fighter_hud", "helicopter", "seaplane", "bush_pilot", "quadcopter", "rocket_launch", "kite_festival",
@@ -116,12 +118,66 @@ def boots_per_theme(cycle):
   return value if isinstance(value, int) and value >= 1 else BOOTS_PER_THEME
 
 
+# How the cycle picks themes (set in The Pond -> Pick a Theme; stored in the same file):
+#   "mode": "cycle" (in order, categories taking turns), "random" (any, not repeating recent ones) or "keep" (stay on one)
+#   "boots_per_theme": start-ups per theme (1-10), "categories": the categories to use (empty = all; "Favorites" = starred)
+#   "favorites": starred theme keys
+CYCLE_MODES = ("cycle", "random", "keep")
+FAVORITES = "Favorites"
+
+
+def cycle_mode(cycle):
+  return cycle.get("mode") if cycle.get("mode") in CYCLE_MODES else "cycle"
+
+
+def installed_keith_themes(packs_path=None):
+  """Theme folders with colors and sounds (a folder left half-deleted never joins the cycle)."""
+  packs = Path(packs_path or frogpilot_paths.THEME_PACKS_PATH)
+  if not packs.is_dir():
+    return []
+  return [p.name for p in packs.glob("*") if p.is_dir() and (p / "colors").is_dir() and (p / "sounds").is_dir()]
+
+
+def chosen_groups(cycle, packs_path=None):
+  """The category groups the cycle uses: the chosen categories (and Favorites), or every category when none is chosen
+  or none of the chosen ones has an installed theme."""
+  installed = installed_keith_themes(packs_path)
+  groups = keith_theme_groups(installed)
+  categories = cycle.get("categories")
+  chosen = [c for c in categories if isinstance(c, str)] if isinstance(categories, list) else []
+  if not chosen:
+    return groups
+  picked = [(name, keys) for name, keys in groups if name in chosen]
+  if FAVORITES in chosen:
+    stars = cycle.get("favorites")
+    favorites = [key for key in stars if isinstance(key, str) and key in installed and is_keith_theme(key)] if isinstance(stars, list) else []
+    already = {key for _, keys in picked for key in keys}
+    favorites = [key for key in favorites if key not in already]
+    if favorites:
+      picked.append((FAVORITES, favorites))
+  return picked or groups
+
+
 def cycle_order(cycle, packs_path=None):
   packs = Path(packs_path or frogpilot_paths.THEME_PACKS_PATH)
   if cycle.get("order"):
     return [key for key in cycle["order"] if isinstance(key, str) and (packs / key).is_dir()]
-  installed = [path.name for path in packs.glob("*") if path.is_dir()] if packs.is_dir() else []
-  return spread_order(keith_theme_groups(installed))
+  return spread_order(chosen_groups(cycle, packs_path))
+
+
+def next_theme(cycle, order, current):
+  """The theme that comes after current, by the cycle's mode (no change saved)."""
+  mode = cycle_mode(cycle)
+  if mode == "random":
+    import random as _random
+    history = cycle.get("history") if isinstance(cycle.get("history"), list) else []
+    recent = [key for key in history if key in order][-max(len(order) // 2, 1):]
+    choices = [key for key in order if key != current and key not in recent] or [key for key in order if key != current] or order
+    return _random.choice(choices)
+  if current in order:
+    return order[(order.index(current) + 1) % len(order)]
+  index = cycle.get("next", 0) if isinstance(cycle.get("next"), int) else 0
+  return order[index % len(order)]
 
 
 def cycle_status(path=None, packs_path=None):
@@ -133,12 +189,185 @@ def cycle_status(path=None, packs_path=None):
   if not order:
     return None
   current = cycle.get("current")
-  if current in order:
-    following = order[(order.index(current) + 1) % len(order)]
+  mode = cycle_mode(cycle)
+  if mode == "random":
+    following = None                                         # decided at the start-up
+  elif mode == "keep":
+    following = current if current in order else order[0]
   else:
-    following = order[cycle.get("next", 0) % len(order) if isinstance(cycle.get("next"), int) else 0]
+    following = next_theme(cycle, order, current)
   boots = cycle.get("boots", 0) if isinstance(cycle.get("boots"), int) else 0
-  return current, max(boots_per_theme(cycle) - boots, 0), following
+  left = None if mode == "keep" else max(boots_per_theme(cycle) - boots, 0)
+  return current, left, following
+
+
+def theme_settings(path=None):
+  """Everything The Pond shows about how themes change."""
+  try:
+    with open(path or THEME_CYCLE_PATH) as file:
+      cycle = json.load(file)
+  except (OSError, ValueError):
+    cycle = {}
+  if not isinstance(cycle, dict):
+    cycle = {}
+  return {
+    "enabled": bool(cycle.get("enabled")),
+    "mode": cycle_mode(cycle),
+    "boots_per_theme": boots_per_theme(cycle),
+    "categories": [c for c in cycle.get("categories") if isinstance(c, str)] if isinstance(cycle.get("categories"), list) else [],
+    "favorites": [k for k in cycle.get("favorites") if isinstance(k, str)] if isinstance(cycle.get("favorites"), list) else [],
+  }
+
+
+def update_theme_settings(changes, path=None):
+  """Save settings from The Pond. Unknown or invalid values are ignored; returns the new settings."""
+  try:
+    with open(path or THEME_CYCLE_PATH) as file:
+      cycle = json.load(file)
+  except (OSError, ValueError):
+    cycle = {}
+  if not isinstance(cycle, dict):
+    cycle = {}
+  if isinstance(changes.get("enabled"), bool):
+    cycle["enabled"] = changes["enabled"]
+  if changes.get("mode") in CYCLE_MODES:
+    cycle["mode"] = changes["mode"]
+  if isinstance(changes.get("boots_per_theme"), int) and 1 <= changes["boots_per_theme"] <= 10:
+    cycle["boots_per_theme"] = changes["boots_per_theme"]
+    if isinstance(cycle.get("boots"), int):
+      cycle["boots"] = min(cycle["boots"], changes["boots_per_theme"])
+  if isinstance(changes.get("categories"), list):
+    allowed = set(KEITH_THEME_CATEGORIES) | {FAVORITES, "More"}
+    cycle["categories"] = [c for c in changes["categories"] if c in allowed]
+  if isinstance(changes.get("favorite"), str) and is_keith_theme(changes["favorite"]):
+    favorites = [k for k in cycle.get("favorites") if isinstance(k, str)] if isinstance(cycle.get("favorites"), list) else []
+    if changes.get("starred", True):
+      if changes["favorite"] not in favorites:
+        favorites.append(changes["favorite"])
+    else:
+      favorites = [k for k in favorites if k != changes["favorite"]]
+    cycle["favorites"] = favorites
+  cycle.pop("order", None)                                   # the category order is used from now on
+  save_theme_cycle(cycle, path)
+  return theme_settings(path)
+
+
+def peek_next_theme(path=None, packs_path=None):
+  """The theme "Next theme now" switches to."""
+  cycle = load_theme_cycle(path)
+  if cycle is None:
+    return None
+  order = cycle_order(cycle, packs_path)
+  if not order:
+    return None
+  current = cycle.get("current")
+  if cycle_mode(cycle) == "keep":
+    return next_theme({**cycle, "mode": "cycle"}, order, current)
+  return next_theme(cycle, order, current)
+
+
+# Keith's themes shipped inside a release (frogpilot/assets/keith_themes), so a new theme reaches the comma with a
+# normal Update even when the PC can't reach the comma. At start-up each bundled theme is copied into /data/themes when
+# it's missing or the bundled copy changed. A theme installed for the first time becomes the cycle's current theme, so
+# the next start-ups show it (3 start-ups, then the cycle goes on).
+KEITH_THEMES_BUNDLE = Path(__file__).resolve().parent / "keith_themes"
+BUNDLE_MARKER = ".keith_bundle"
+
+
+BUNDLE_STATE = ".keith_bundle_state.json"     # in /data/themes: bundled themes installed so far, {key: signature}
+
+
+def bundle_signature(folder, wheels=()):
+  """Fingerprint of a bundled theme: every file of its pack plus its steering wheel."""
+  import hashlib
+  digest = hashlib.sha256()
+  for path in sorted(folder.rglob("*")):
+    if path.is_file() and path.name != BUNDLE_MARKER:
+      digest.update(str(path.relative_to(folder)).encode())
+      digest.update(path.read_bytes())
+  for wheel in sorted(wheels):
+    digest.update(wheel.name.encode())
+    digest.update(wheel.read_bytes())
+  return digest.hexdigest()
+
+
+def install_bundled_themes(bundle=None, packs=None, wheels=None, cycle_path=None):
+  """Copy bundled themes into /data/themes. Returns the keys installed for the first time.
+  A bundled theme Keith deleted (in The Pond or Settings) stays deleted; an updated one is copied again."""
+  bundle = Path(bundle or KEITH_THEMES_BUNDLE)
+  packs = Path(packs or frogpilot_paths.THEME_PACKS_PATH)
+  wheels = Path(wheels or frogpilot_paths.STEERING_WHEELS_PATH)
+  new_keys = []
+  if not (bundle / "theme_packs").is_dir():
+    return new_keys
+  state_path = packs.parent / BUNDLE_STATE
+  try:
+    state = json.loads(state_path.read_text())
+    state = state if isinstance(state, dict) else {}
+  except (OSError, ValueError):
+    state = {}
+  changed = False
+  for source in sorted((bundle / "theme_packs").iterdir()):
+    if not source.is_dir():
+      continue
+    key = source.name
+    target = packs / key
+    try:
+      bundled_wheels = list((bundle / "steering_wheels").glob(f"{key}.*"))
+      signature = bundle_signature(source, bundled_wheels)
+      complete = (target / "colors").is_dir() and (target / "sounds").is_dir()
+      anything_left = target.is_dir() and any(p.name != BUNDLE_MARKER for p in target.iterdir())
+      interrupted = (packs / f".{key}.new").exists()   # an update stopped between removing the old copy and renaming
+      if key in state and not interrupted:
+        if not anything_left:
+          # The whole theme was deleted (only the marker, or nothing, is left): it stays deleted.
+          shutil.rmtree(target, ignore_errors=True)
+          continue
+        if not complete:
+          continue                                   # a part was deleted on purpose: leave the theme as Keith set it
+        if state[key] == signature:
+          continue
+      first_time = key not in state and not complete
+      temp = packs / f".{key}.new"
+      shutil.rmtree(temp, ignore_errors=True)
+      packs.mkdir(parents=True, exist_ok=True)
+      shutil.copytree(source, temp)
+      (temp / BUNDLE_MARKER).write_text(signature)
+      shutil.rmtree(target, ignore_errors=True)
+      temp.rename(target)
+      for wheel in bundled_wheels:
+        wheels.mkdir(parents=True, exist_ok=True)
+        for old in wheels.glob(f"{key}.*"):
+          old.unlink()
+        shutil.copy2(wheel, wheels / wheel.name)
+      state[key] = signature
+      changed = True
+      print(f"Installed bundled theme {key}")
+      if first_time:
+        new_keys.append(key)
+    except Exception as error:                    # one theme failing must not stop the others
+      print(f"Bundled theme {key} not installed: {error}")
+  if changed:
+    try:
+      temp_state = state_path.with_name(state_path.name + ".tmp")
+      temp_state.write_text(json.dumps(state, indent=2))
+      temp_state.replace(state_path)
+    except OSError:
+      pass
+  if new_keys:
+    listed = [name + KEITH_THEME_SUFFIX for names in KEITH_THEME_CATEGORIES.values() for name in names]
+    new_keys.sort(key=lambda key: listed.index(key) if key in listed else len(listed))   # RedMan first
+    cycle = load_theme_cycle(cycle_path)
+    # show the new theme next, unless Keith chose "Never change" or it's outside the categories he chose
+    if cycle is not None and cycle_mode(cycle) != "keep" and        new_keys[0] in cycle_order({k: v for k, v in cycle.items() if k != "order"}, packs):
+      cycle["current"] = new_keys[0]
+      cycle["boots"] = 0
+      cycle.pop("order", None)                    # an old fixed order would never reach the new themes
+      try:
+        save_theme_cycle(cycle, cycle_path)
+      except OSError:
+        pass
+  return new_keys
 
 
 # "Switch to this theme now" requests from The Pond's theme picker and the parked long-press on the wheel button.
@@ -186,11 +415,11 @@ def move_cycle_to(key, path=None):
   if cycle is None:
     return
   order = cycle_order(cycle)
-  if key not in order:
+  if key not in order and not is_keith_theme(key):
     return
   cycle["current"] = key
   cycle["boots"] = 0
-  cycle["next"] = (order.index(key) + 1) % len(order)
+  cycle["next"] = (order.index(key) + 1) % len(order) if key in order else cycle.get("next", 0)
   try:
     save_theme_cycle(cycle, path)
   except OSError:
@@ -198,8 +427,8 @@ def move_cycle_to(key, path=None):
 
 
 def cycle_theme(advance, path=None, packs_path=None):
-  """The cycle's theme. At a start-up (advance) the current one counts one more start-up, or the next one comes on once
-  the current one had all of its start-ups. Otherwise just the current one. None when the cycle is off."""
+  """The cycle's theme. At a start-up (advance) the current one counts one more start-up, or the next one (by the mode)
+  comes on once the current one had all of its start-ups; "keep" never changes it. None when the cycle is off."""
   cycle = load_theme_cycle(path)
   if cycle is None:
     return None
@@ -208,23 +437,24 @@ def cycle_theme(advance, path=None, packs_path=None):
   if not order:
     return None
 
+  mode = cycle_mode(cycle)
   current = cycle.get("current")
   boots = cycle.get("boots", 0) if isinstance(cycle.get("boots"), int) else 0
-  if current in order and (not advance or boots < boots_per_theme(cycle)):
-    if advance:
-      cycle["boots"] = boots + 1
-    else:
+  packs = Path(packs_path or frogpilot_paths.THEME_PACKS_PATH)
+  # a theme picked by hand counts even outside the chosen categories (it gets its turn, or stays in "keep" mode)
+  valid = current in order or (is_keith_theme(current) and (packs / current).is_dir())
+  if valid and (not advance or mode == "keep" or boots < boots_per_theme(cycle)):
+    if not advance or mode == "keep":
       return current
+    cycle["boots"] = boots + 1
   else:
-    if current in order:
-      index = order.index(current) + 1
-    else:
-      index = cycle.get("next", 0) if isinstance(cycle.get("next"), int) else 0
-    index %= len(order)
-    current = order[index]
+    current = next_theme(cycle, order, current)
     cycle["current"] = current
     cycle["boots"] = 1
-    cycle["next"] = (index + 1) % len(order)
+    cycle["next"] = (order.index(current) + 1) % len(order)
+    if mode == "random":
+      history = cycle.get("history") if isinstance(cycle.get("history"), list) else []
+      cycle["history"] = ([k for k in history if isinstance(k, str)] + [current])[-len(order):]
   try:
     save_theme_cycle(cycle, path)
   except OSError:
