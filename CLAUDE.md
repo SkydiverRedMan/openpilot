@@ -30,14 +30,15 @@ Personal FrogPilot fork for Keith's comma 3X in a Toyota Highlander. Never push 
 * How themes change (2026-11-23): The Pond -> Pick a Theme sets mode (in order / random / keep one), start-ups per
   theme (1-10), categories (e.g. only Photos) and starred Favorites, plus Next theme now; stored in
   `/data/themes/keith_theme_cycle.json` (`theme_settings` / `update_theme_settings` in theme_manager.py).
-* Bundled themes (2026-11-23): themes in `frogpilot/assets/keith_themes/` ship inside the release and are copied to
-  /data/themes at start-up (`install_bundled_themes`); a first-time theme becomes the cycle's current theme. This is how a
-  new theme (RedMan) reaches the comma with a plain Update when the comma is offline. Build it in FrogPilotThemes, copy
-  `build/theme_packs/<key>` and its wheel into the bundle. A Python/asset-only release can be made on the PC by running
-  `tools/na2/quick_release_on_device.sh` there (python3 -> python, WORK in a scratch folder) and pushing `release:na2`.
+* **Never put personal photos (family, faces, pets, home) in this repo: it is PUBLIC, and so is every na2 release.**
+  On 2026-11-23 Keith's photo themes were bundled into the release by mistake and had to be removed from history.
+  Photo themes live only in the private SkydiverRedMan/frogpilot-themes repo and go to the comma over SSH
+  (FrogPilotThemes `install.sh`), never through GitHub. `install_bundled_themes` (frogpilot/assets/keith_themes) may
+  only carry non-personal themes; it is empty now.
+* A Python/asset-only release can be made on the PC by running `tools/na2/quick_release_on_device.sh` there (python3 ->
+  python, WORK in a scratch folder) and pushing `release:na2`.
   On Windows also make its `git()` helper pass bytes (`input=data.encode()`, no `text=True`): text mode turns the
-  mktree input into CRLF and renames ~1600 files with a trailing `
-` (caught before pushing on 2026-11-23). Check that
+  mktree input into CRLF and renames ~1600 files with a trailing `` (caught before pushing on 2026-11-23). Check that
   `git diff --stat origin/na2 release` lists only the files you changed before pushing.
 * Navigation Assist is advisory only: it must never publish anything controls, planners, models or lane-change code
   read, never steer/signal/change speed. See `docs/navigation-assist/`.
@@ -92,4 +93,4 @@ Details: `docs/navigation-assist/DEPLOYMENT.md`. Status of milestones: `docs/nav
   account, then on the comma re-add the GitHub username under SSH Keys so it fetches the new key.
 * Docker Desktop is only needed for the PC build/render checks (`Dockerfile.openpilot_base`); unit tests also run in
   `python:3.11-slim` with `pytest` and `pycapnp==2.0.0`.
-* Last known comma address: `192.168.68.59` (2026-11-22; it changes) (check FrogPilot → Navigation → "Manage Your Settings At").
+* Last known comma address: `192.168.68.51` (2026-11-23; it changes) (check FrogPilot → Navigation → "Manage Your Settings At").

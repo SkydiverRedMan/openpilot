@@ -6,12 +6,11 @@
 // how many start-ups each theme stays; which categories (and ★ Favorites) to use. Works while driving too.
 
 const P = window.Pond;
-const MODES = [["cycle", "In order", "Categories take turns"], ["random", "Random", "Never the same one twice in a row"],
-               ["keep", "Keep one theme", "Stays until you pick another"]];
+const MODES = [["cycle", "In order", "The next theme each time"], ["random", "Random", "A random theme each time, never the same twice in a row"],
+               ["keep", "Never change", "Stays on one theme until you pick another"]];
 const BOOTS = [1, 2, 3, 4, 5, 7, 10];
 
 function card(theme) {
-  const swatches = theme.colors.map(color => `<span class="tp-sw" style="background:${color}"></span>`).join("");
   const key = encodeURIComponent(theme.key);
   return `<div class="tp-card${theme.current ? " tp-current" : ""}">
     <button class="tp-star${theme.favorite ? " on" : ""}" type="button" data-act="theme-star" data-key="${P.esc(theme.key)}"
@@ -21,7 +20,6 @@ function card(theme) {
       <img class="tp-wheel" src="/api/theme_picker/${key}/wheel" alt="" loading="lazy">
     </div>
     <b>${P.esc(theme.name)}</b>
-    <span class="tp-sws">${swatches}</span>
     ${theme.current ? `<span class="tp-badge">${P.ic("check")}In use</span>`
                     : `<button class="btn btn-primary btn-small" type="button" data-act="theme-pick" data-key="${P.esc(theme.key)}" data-name="${P.esc(theme.name)}">Use this theme</button>`}
   </div>`;
@@ -52,12 +50,18 @@ function panel(data) {
   const bootRow = BOOTS.map(n => choice("theme-boots", n, String(n), s.boots_per_theme === n)).join("");
   const categoryRow = choice("theme-category", "", "All", chosen.size === 0) +
     data.categories.map(name => choice("theme-category", name, name === "Favorites" ? "★ Favorites" : name, chosen.has(name))).join("");
+  // One plain sentence that says exactly what the choices above do
+  const from = chosen.size ? ` from ${[...chosen].map(name => P.esc(name)).join(" and ")}` : " from all your themes";
+  const every = s.boots_per_theme === 1 ? "Every start-up" : `Every ${s.boots_per_theme} start-ups`;
+  const summary = !on ? "" : s.mode === "keep" ? `It stays on ${P.esc(c.current || "the current theme")} and never changes by itself.`
+    : s.mode === "random" ? `${every}, a random theme${from}.` : `${every}, the next theme${from}.`;
   return `<section class="panel tp-settings"><div class="panel-body">
     <h3 class="tp-cat">How themes change</h3>
     <div class="tp-row"><span class="tp-label">Theme changes</span>${choice("theme-enabled", "1", "On", on)}${choice("theme-enabled", "0", "Off", !on)}</div>
-    <div class="tp-row${on ? "" : " tp-off"}"><span class="tp-label">How</span>${modeRow}</div>
-    <div class="tp-row${on && s.mode !== "keep" ? "" : " tp-off"}"><span class="tp-label">Change every</span>${bootRow}<span class="tp-unit">start-ups</span></div>
-    <div class="tp-row${on ? "" : " tp-off"}"><span class="tp-label">Use</span>${categoryRow}</div>
+    <div class="tp-row${on ? "" : " tp-off"}"><span class="tp-label">1. Which themes</span>${categoryRow}</div>
+    <div class="tp-row${on ? "" : " tp-off"}"><span class="tp-label">2. How they change</span>${modeRow}</div>
+    <div class="tp-row${on && s.mode !== "keep" ? "" : " tp-off"}"><span class="tp-label">3. Change every</span>${bootRow}<span class="tp-unit">start-ups</span></div>
+    ${summary ? `<p class="tp-summary">${summary}</p>` : ""}
     <p class="tp-status">${status}</p>
     ${on ? `<button class="btn btn-small" type="button" data-act="theme-next">${P.ic("refresh")}Next theme now</button>` : ""}
     <p class="tp-hint">Tap ☆ on a theme to add it to ★ Favorites. A theme you pick by hand gets its own turn, even outside the chosen categories.</p>
@@ -122,28 +126,6 @@ P.page("theme_picker", {
       <div class="tp-grid">${group.themes.map(card).join("")}</div></div></section>`).join("");
     return {
       body: `
-      <style>
-        .tp-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:12px; }
-        .tp-card { position:relative; display:flex; flex-direction:column; align-items:center; gap:8px; padding:12px; border-radius:12px;
-                   border:1px solid var(--line, #ccc); text-align:center; }
-        .tp-current { outline:3px solid var(--accent, #2e7d32); }
-        .tp-imgs { display:flex; align-items:center; gap:6px; }
-        .tp-imgs img { width:72px; height:72px; }
-        .tp-imgs img.tp-wheel { width:48px; height:48px; }
-        .tp-sws { display:flex; gap:4px; }
-        .tp-sw { width:16px; height:16px; border-radius:4px; border:1px solid rgba(0,0,0,.2); }
-        .tp-cat { margin:0 0 10px; font-size:17px; }
-        .tp-badge { display:inline-flex; align-items:center; gap:4px; font-size:13px; }
-        .tp-star { position:absolute; top:6px; left:8px; background:none; border:0; font-size:22px; line-height:1; cursor:pointer;
-                   color:var(--muted, #888); padding:4px; min-width:32px; min-height:32px; }
-        .tp-star.on { color:#f9a825; }
-        .tp-row { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:0 0 10px; }
-        .tp-label { min-width:110px; font-weight:600; }
-        .tp-unit { color:var(--muted, #888); font-size:13px; }
-        .tp-off { opacity:.45; }
-        .tp-status { margin:4px 0 10px; }
-        .tp-hint { margin:10px 0 0; color:var(--muted, #888); font-size:13px; }
-      </style>
       ${panel(data)}
       ${groups || `<div class="empty"><h3>None of your themes are installed</h3></div>`}`
     };

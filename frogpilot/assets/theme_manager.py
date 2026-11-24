@@ -143,12 +143,14 @@ def chosen_groups(cycle, packs_path=None):
   or none of the chosen ones has an installed theme."""
   installed = installed_keith_themes(packs_path)
   groups = keith_theme_groups(installed)
-  chosen = [c for c in cycle.get("categories") or [] if isinstance(c, str)]
+  categories = cycle.get("categories")
+  chosen = [c for c in categories if isinstance(c, str)] if isinstance(categories, list) else []
   if not chosen:
     return groups
   picked = [(name, keys) for name, keys in groups if name in chosen]
   if FAVORITES in chosen:
-    favorites = [key for key in cycle.get("favorites") or [] if key in installed and is_keith_theme(key)]
+    stars = cycle.get("favorites")
+    favorites = [key for key in stars if isinstance(key, str) and key in installed and is_keith_theme(key)] if isinstance(stars, list) else []
     already = {key for _, keys in picked for key in keys}
     favorites = [key for key in favorites if key not in already]
     if favorites:
@@ -168,7 +170,8 @@ def next_theme(cycle, order, current):
   mode = cycle_mode(cycle)
   if mode == "random":
     import random as _random
-    recent = [key for key in cycle.get("history") or [] if key in order][-max(len(order) // 2, 1):]
+    history = cycle.get("history") if isinstance(cycle.get("history"), list) else []
+    recent = [key for key in history if key in order][-max(len(order) // 2, 1):]
     choices = [key for key in order if key != current and key not in recent] or [key for key in order if key != current] or order
     return _random.choice(choices)
   if current in order:
@@ -211,8 +214,8 @@ def theme_settings(path=None):
     "enabled": bool(cycle.get("enabled")),
     "mode": cycle_mode(cycle),
     "boots_per_theme": boots_per_theme(cycle),
-    "categories": [c for c in cycle.get("categories") or [] if isinstance(c, str)],
-    "favorites": [k for k in cycle.get("favorites") or [] if isinstance(k, str)],
+    "categories": [c for c in cycle.get("categories") if isinstance(c, str)] if isinstance(cycle.get("categories"), list) else [],
+    "favorites": [k for k in cycle.get("favorites") if isinstance(k, str)] if isinstance(cycle.get("favorites"), list) else [],
   }
 
 
@@ -237,7 +240,7 @@ def update_theme_settings(changes, path=None):
     allowed = set(KEITH_THEME_CATEGORIES) | {FAVORITES, "More"}
     cycle["categories"] = [c for c in changes["categories"] if c in allowed]
   if isinstance(changes.get("favorite"), str) and is_keith_theme(changes["favorite"]):
-    favorites = [k for k in cycle.get("favorites") or [] if isinstance(k, str)]
+    favorites = [k for k in cycle.get("favorites") if isinstance(k, str)] if isinstance(cycle.get("favorites"), list) else []
     if changes.get("starred", True):
       if changes["favorite"] not in favorites:
         favorites.append(changes["favorite"])
@@ -355,7 +358,8 @@ def install_bundled_themes(bundle=None, packs=None, wheels=None, cycle_path=None
     listed = [name + KEITH_THEME_SUFFIX for names in KEITH_THEME_CATEGORIES.values() for name in names]
     new_keys.sort(key=lambda key: listed.index(key) if key in listed else len(listed))   # RedMan first
     cycle = load_theme_cycle(cycle_path)
-    if cycle is not None:
+    # show the new theme next, unless Keith chose "Never change" or it's outside the categories he chose
+    if cycle is not None and cycle_mode(cycle) != "keep" and        new_keys[0] in cycle_order({k: v for k, v in cycle.items() if k != "order"}, packs):
       cycle["current"] = new_keys[0]
       cycle["boots"] = 0
       cycle.pop("order", None)                    # an old fixed order would never reach the new themes
@@ -449,7 +453,8 @@ def cycle_theme(advance, path=None, packs_path=None):
     cycle["boots"] = 1
     cycle["next"] = (order.index(current) + 1) % len(order)
     if mode == "random":
-      cycle["history"] = ([k for k in cycle.get("history") or [] if isinstance(k, str)] + [current])[-len(order):]
+      history = cycle.get("history") if isinstance(cycle.get("history"), list) else []
+      cycle["history"] = ([k for k in history if isinstance(k, str)] + [current])[-len(order):]
   try:
     save_theme_cycle(cycle, path)
   except OSError:

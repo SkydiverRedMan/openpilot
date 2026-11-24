@@ -1,0 +1,23 @@
+/* Pick a Theme (Keith). In its own file: the Pond's Content-Security-Policy blocks inline styles. */
+.tp-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:12px; }
+.tp-card { position:relative; display:flex; flex-direction:column; align-items:center; gap:8px; padding:12px; border-radius:12px;
+           border:1px solid var(--line, #ccc); text-align:center; }
+.tp-current { outline:3px solid var(--accent, #2e7d32); }
+.tp-imgs { display:flex; align-items:center; gap:6px; }
+.tp-imgs img { width:72px; height:72px; }
+.tp-imgs img.tp-wheel { width:48px; height:48px; }
+.tp-sws { display:flex; gap:4px; }
+.tp-sw { width:16px; height:16px; border-radius:4px; border:1px solid rgba(0,0,0,.2); }
+.tp-cat { margin:0 0 10px; font-size:17px; }
+.tp-badge { display:inline-flex; align-items:center; gap:4px; font-size:13px; }
+.tp-star { position:absolute; top:6px; left:8px; background:none; border:0; font-size:22px; line-height:1; cursor:pointer;
+           color:var(--muted, #888); padding:4px; min-width:32px; min-height:32px; }
+.tp-star.on { color:#f9a825; }
+.tp-row { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:0 0 10px; }
+.tp-label { min-width:110px; font-weight:600; }
+.tp-unit { color:var(--muted, #888); font-size:13px; }
+.tp-off { opacity:.35; }
+.tp-summary { margin:6px 0 4px; font-weight:600; font-size:16px; }
+.tp-status { margin:4px 0 10px; color:var(--muted, #888); }
+.tp-off .tp-choice { pointer-events:none; }
+.tp-hint { margin:10px 0 0; color:var(--muted, #888); font-size:13px; }

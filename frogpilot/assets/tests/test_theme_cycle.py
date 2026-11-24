@@ -266,8 +266,9 @@ def test_redman_shows_first_when_several_bundled_themes_arrive(tm, tmp_path):
   module, path = tm
   bundle = tmp_path / "bundle"
   for key in ("camping-user_created", "pets-user_created", "redman-user_created"):
-    (bundle / "theme_packs" / key).mkdir(parents=True)
-    (bundle / "theme_packs" / key / "x.txt").write_text(key)
+    for part in ("colors", "sounds"):
+      (bundle / "theme_packs" / key / part).mkdir(parents=True)
+      (bundle / "theme_packs" / key / part / "x.txt").write_text(key)
   write(path, enabled=True, current="alpha-user_created", boots=1)
   new = module.install_bundled_themes(bundle=bundle, packs=tmp_path / "theme_packs", wheels=tmp_path / "wheels", cycle_path=path)
   assert new[0] == "redman-user_created" and json.loads(path.read_text())["current"] == "redman-user_created"
@@ -404,3 +405,24 @@ def test_an_interrupted_update_finishes_next_boot(tm, tmp_path):
   shutil.rmtree(packs / "redman-user_created")                 # power lost between removing the old copy and the rename
   module.install_bundled_themes(**kwargs)
   assert (packs / "redman-user_created" / "colors").is_dir()
+
+def test_a_damaged_settings_file_cannot_crash_start_up(tm, tmp_path):
+  module, path = tm
+  make_packs(tmp_path, ["redman", "camping"])
+  write(path, enabled=True, categories=5, favorites="x", history=7, mode=3, boots_per_theme="3", next="a")
+  assert module.cycle_theme(advance=True, path=path) in {"redman-user_created", "camping-user_created"}
+  assert module.theme_settings(path)["categories"] == [] and module.cycle_status(path=path) is not None
+  module.update_theme_settings({"favorite": "redman-user_created"}, path)
+
+
+def test_a_new_bundled_theme_respects_never_change_and_categories(tm, tmp_path):
+  module, path = tm
+  packs = make_packs(tmp_path, ["camping"])
+  bundle = _bundle(tmp_path, "sloth-user_created")
+  write(path, enabled=True, mode="keep", current="camping-user_created", boots=1)
+  module.install_bundled_themes(bundle=bundle, packs=packs, wheels=tmp_path / "wheels", cycle_path=path)
+  assert json.loads(path.read_text())["current"] == "camping-user_created"            # "Never change" is kept
+  write(path, enabled=True, categories=["Photos"], current="camping-user_created", boots=1)
+  bundle2 = _bundle(tmp_path / "b2", "hedgehog-user_created")
+  module.install_bundled_themes(bundle=bundle2, packs=packs, wheels=tmp_path / "wheels", cycle_path=path)
+  assert json.loads(path.read_text())["current"] == "camping-user_created"            # an Animals theme doesn't jump in
