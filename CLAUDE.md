@@ -16,7 +16,8 @@ Personal FrogPilot fork for Keith's comma 3X in a Toyota Highlander. Never push 
 * The comma runs a **prebuilt** branch: Update installs the newest `na2` commit as-is and compiles nothing.
   Any change to C++/Qt, `cereal/*.capnp`, or `common/params.cc` keys needs a full rebuild on the comma
   (`tools/na2/build_on_device.sh`). Never replace a single binary, and never add a param key in Python only.
-* Keep Keith's customizations: paramotor boot logo and steering wheel, custom startup/engage sounds, Highlander BSM
+* Keep Keith's customizations: paramotor boot logo and steering wheel, Woo Hoo start-up sound (only the startup
+  sound since 2026-11-24, `frogpilot/assets/other_sounds/woo_hoo.wav`; engage and the rest come from the theme), Highlander BSM
   (`selfdrive/car/toyota/interface.py`, `opendbc/toyota_tnga_k_pt_generated.dbc`), his default settings, and saved speed
   limits (`docs/saved-speed-limits.md`; data in `/data/saved_speed_limits.json`, never delete it).
 * Theme test cycle (2026-11-22): `/data/themes/keith_theme_cycle.json` with `"enabled": true` makes each boot show the next

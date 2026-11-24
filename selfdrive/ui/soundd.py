@@ -3,6 +3,8 @@ import numpy as np
 import time
 import wave
 
+from pathlib import Path
+
 from typing import Any
 
 from cereal import car, custom, messaging
@@ -34,6 +36,7 @@ FrogPilotAudibleAlert = custom.FrogPilotCarControl.HUDControl.AudibleAlert
 # Keith: Navigation Assist's spoken prompts (navigationAssist.voicePrompt / voicePromptCount). A prompt plays only while
 # no openpilot or FrogPilot alert is sounding, and any alert cuts it off at once.
 NAV_VOICE_DIR = BASEDIR + "/frogpilot/assets/navigation_voice"
+KEITH_STARTUP_SOUND = Path(BASEDIR) / "frogpilot/assets/other_sounds/woo_hoo.wav"
 
 
 def load_nav_voices() -> dict[str, np.ndarray]:
@@ -138,7 +141,10 @@ class Soundd:
       random_events_path = self.random_events_directory / filename
       sounds_path = self.sound_directory / filename
 
-      if random_events_path.exists():
+      if sound == FrogPilotAudibleAlert.startup and KEITH_STARTUP_SOUND.exists():
+        # Keith: his Woo Hoo greets every start-up (after the paramotor boot picture); every other sound is the theme's
+        wavefile = wave.open(str(KEITH_STARTUP_SOUND), 'r')
+      elif random_events_path.exists():
         goat_scream = sound == FrogPilotAudibleAlert.goat and self.frogpilot_toggles.goat_scream_alert
         if not self.frogpilot_toggles.random_events and not goat_scream:
           continue
