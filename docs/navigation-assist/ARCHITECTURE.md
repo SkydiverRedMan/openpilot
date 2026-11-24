@@ -83,8 +83,22 @@ instability before. So `na2` is rebuilt as one complete, internally consistent r
    traffic warning waits 1.5 s. It never says a lane is clear. Without lane data above lane change speed it shows the
    maneuver with "lane position unknown". Limits: the camera only knows whether *a* lane exists beside the car, not
    how many; BSM on this Highlander is unverified (see KNOWN-LIMITATIONS.md).
-3. **Timing.** Tune the time-based thresholds for 85-90 mph, progressive prompts, optional sound (off by default),
-   and an event log reviewed after drives (`navigationAssist` is already logged at 1 Hz in rlogs).
+3. **Timing and sound (2026-11-24).** Reviewed against Keith's real drives (Nov 20-21, 2026: 4 drives, 2.4 h with a
+   route; `tools/na2/navassist_review_on_device.py`): every maneuver was right (exit/turn, side, about 2 mi warning at
+   highway speed), but the lane advice flip-flopped (MOVE RIGHT <-> IN EXIT LANE about 10 times in the last 2 mi before
+   Exit 653), because near exits a shoulder measures as wide as a lane (2.2-3.2 m). Changes, checked by replaying those
+   drives through old and new logic (`tools/na2/navassist_replay_on_device.py`):
+   * a lane must be seen 3 s before it counts and gone 2 s before it stops counting; lane advice stays up at least 8 s
+     (traffic warnings still appear at once);
+   * Mapbox first: on a two-lane road the lane on the *other* side shows which lane the car is in; "ANY LANE" when
+     Mapbox says every lane can take the maneuver;
+   * within 1/2 mi of an exit, a lane appearing on that side after "IN EXIT LANE" is announced once as
+     "EXIT LANE OPENING";
+   * spoken prompts (`NavigationAssistVoice`, off by default): one "coming up" prompt per maneuver and one per new lane
+     advice, at least 6 s apart, never about traffic, nothing within 30 m or 4 s of the maneuver, and no repeat when a
+     route update renames a maneuver that is still ahead; phrases in `frogpilot/assets/navigation_voice` (Windows' Zira
+     voice, `tools/na2/make_navigation_voice.ps1`); soundd plays a prompt only while no alert is sounding, and any alert
+     cuts it off.
 4. **Navigation-guided steering (future; not advisory).** openpilot should *know* the route's next maneuver and lean
    the driving toward it, with the driver still doing what the car can't (for example most of a full right turn at an
    intersection). This deliberately changes the "advisory only" rule, so it is its own milestone, built only after

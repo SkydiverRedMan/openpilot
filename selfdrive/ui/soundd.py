@@ -31,6 +31,29 @@ AudibleAlert = car.CarControl.HUDControl.AudibleAlert
 # FrogPilot variables
 FrogPilotAudibleAlert = custom.FrogPilotCarControl.HUDControl.AudibleAlert
 
+# Keith: Navigation Assist's spoken prompts (navigationAssist.voicePrompt / voicePromptCount). A prompt plays only while
+# no openpilot or FrogPilot alert is sounding, and any alert cuts it off at once.
+NAV_VOICE_DIR = BASEDIR + "/frogpilot/assets/navigation_voice"
+
+
+def load_nav_voices() -> dict[str, np.ndarray]:
+  import os
+  voices: dict[str, np.ndarray] = {}
+  if not os.path.isdir(NAV_VOICE_DIR):
+    return voices
+  for name in os.listdir(NAV_VOICE_DIR):
+    if not name.endswith(".wav"):
+      continue
+    try:
+      with wave.open(os.path.join(NAV_VOICE_DIR, name), 'r') as wavefile:
+        if (wavefile.getnchannels(), wavefile.getsampwidth(), wavefile.getframerate()) != (1, 2, SAMPLE_RATE):
+          continue
+        data = wavefile.readframes(wavefile.getnframes())
+      voices[name[:-4]] = np.frombuffer(data, dtype=np.int16).astype(np.float32) / (2**16/2)
+    except Exception:
+      cloudlog.exception(f"soundd: could not load navigation voice {name}")
+  return voices
+
 
 sound_list: dict[Any, tuple[str, int | None, float]] = {
   # AudibleAlert, file name, play count (none for infinite)
@@ -97,6 +120,11 @@ class Soundd:
 
     self.sound_source = None
 
+    self.nav_voices = load_nav_voices()
+    self.nav_voice: np.ndarray | None = None   # the prompt being spoken
+    self.nav_voice_frame = 0
+    self.nav_voice_count: int | None = None    # last voicePromptCount seen (None until the first message)
+
     self.update_frogpilot_sounds()
 
   def load_sounds(self):
@@ -140,6 +168,17 @@ class Soundd:
 
     ret = np.zeros(frames, dtype=np.float32)
 
+    # Keith: a navigation prompt plays only when no alert is sounding; an alert cuts it off at once
+    if self.current_alert != AudibleAlert.none:
+      self.nav_voice = None
+    elif self.nav_voice is not None:
+      chunk = self.nav_voice[self.nav_voice_frame:self.nav_voice_frame + frames]
+      ret[:len(chunk)] = chunk
+      self.nav_voice_frame += len(chunk)
+      if self.nav_voice_frame >= len(self.nav_voice):
+        self.nav_voice = None
+      return ret * self.current_volume
+
     if self.current_alert != AudibleAlert.none:
       num_loops = sound_list[self.current_alert][1]
       sound_data = self.loaded_sounds[self.current_alert]
@@ -166,6 +205,22 @@ class Soundd:
     if status:
       cloudlog.warning(f"soundd stream over/underflow: {status}")
     data_out[:frames, 0] = self.get_sound_data(frames)
+
+  def update_nav_voice(self, sm):
+    if not sm.updated['navigationAssist']:
+      return
+    na = sm['navigationAssist']
+    count = int(na.voicePromptCount)
+    if self.nav_voice_count is None:            # don't replay an old prompt when soundd (re)starts mid-drive
+      self.nav_voice_count = count
+      return
+    if count == self.nav_voice_count:
+      return
+    self.nav_voice_count = count
+    voice = self.nav_voices.get(str(na.voicePrompt))
+    if voice is not None and self.current_alert == AudibleAlert.none and self.nav_voice is None:
+      self.nav_voice_frame = 0
+      self.nav_voice = voice
 
   def update_alert(self, new_alert):
     current_alert_played_once = self.current_alert == AudibleAlert.none or self.current_sound_frame > len(self.loaded_sounds[self.current_alert])
@@ -227,7 +282,7 @@ class Soundd:
     # sounddevice must be imported after forking processes
     import sounddevice as sd
 
-    sm = messaging.SubMaster(['controlsState', 'microphone', 'frogpilotControlsState', 'frogpilotPlan'])
+    sm = messaging.SubMaster(['controlsState', 'microphone', 'frogpilotControlsState', 'frogpilotPlan', 'navigationAssist'])
 
     with self.get_stream(sd) as stream:
       rk = Ratekeeper(20)
@@ -236,7 +291,7 @@ class Soundd:
       while True:
         sm.update(0)
 
-        if sm.updated['microphone'] and self.current_alert == AudibleAlert.none: # only update volume filter when not playing alert
+        if sm.updated['microphone'] and self.current_alert == AudibleAlert.none and self.nav_voice is None: # only update volume filter when not playing alert
           self.spl_filter_weighted.update(sm["microphone"].soundPressureWeightedDb)
           self.current_volume = self.calculate_volume(float(self.spl_filter_weighted.x))
 
@@ -250,6 +305,7 @@ class Soundd:
           stream = self.update_frogpilot_sounds(sd, stream)
 
         self.get_audible_alert(sm)
+        self.update_nav_voice(sm)
 
         rk.keep_time()
 

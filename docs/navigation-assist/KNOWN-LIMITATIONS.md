@@ -13,7 +13,10 @@
   blocks (what Keith observed), and Navigation Assist's traffic warning can only come from the front radar's
   adjacent-lane targets. Likely fix (separate project): poll the blind spot module over diagnostic CAN, as some
   community forks do for TSS-P Toyotas, which needs care with panda safety; verify first with a recorded drive.
-* No sound. An optional sound (off by default) is planned for Milestone 3.
+* Spoken prompts are optional (off by default) and English only. They're short fixed phrases (no distances), and
+  they never mention traffic: with no blind spot data, nothing may sound like "it's clear".
+* The camera can't tell a wide shoulder from a lane. Mapbox lane guidance settles it only on two-lane roads; elsewhere
+  the advice holds steady (3 s / 8 s) instead of flip-flopping, but can still be wrong near exits.
 * Thresholds (3.2 km / 100 s approaching, 400 m / 15 s imminent) are first guesses. They need tuning from real drives
   at 85-90 mph.
 
